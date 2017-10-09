@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>ln admin frontend</title>
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/css/materialize.min.css">
+    <link rel="stylesheet" href="./assets/css/styles.css">
+
+    <link rel="icon" type="image/png" href="/assets/images/ln.png">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  </head>
+  <body>
+    <div id="app">
+      <nav class="nav-extended">
+        <div class="nav-wrapper blue-grey">
+          <a class="brand-logo">ln Admin Interface</a>
+          <a v-show="loggedIn" href="#" data-activates="mobile-menu" class="button-collapse"><i class="material-icons">menu</i></a>
+          <ul v-show="loggedIn" id="nav-mobile" class="right hide-on-med-and-down">
+            <li><a>{{user_id}}</a></li>
+            <li><a v-on:click="logout">Logout</a></li>
+          </ul>
+          <ul v-show="loggedIn" id="mobile-menu" class="side-nav">
+            <li v-show="loggedIn"><a class="subheader">{{user_id}}</a></li>
+            <li v-show="loggedIn"><a v-on:click="logout">Logout</a></li>
+          </ul>
+        </div>
+        <div v-show="loggedIn" class="nav-content blue-grey">
+          <ul class="tabs tabs-transparent">
+            <li class="tab"><a class="active" href="#addusers">Add Users</a></li>
+            <li class="tab"><a href="#queryuser">Query user</a></li>
+            <li class="tab"><a href="#channels">Add Channels</a></li>
+          </ul>
+        </div>
+      </nav>
+      <div v-show="!loggedIn" class="row">
+        <div class="col s6 offset-s3">
+          <div class="card blue-grey lighten-5">
+            <div class="card-content">
+              <span class="card-title">Are you an admin? Please login!</span>
+              <form v-on:submit.prevent="login" class="row">
+                <div class="input-field col s12">
+                  <input type="text" placeholder="User ID" name="adminid" id="adminid">
+                  <label for="userid">Admin ID</label>
+                </div>
+                <div class="input-field col s12">
+                  <input type="password" placeholder="Password" name="password" id="password">
+                  <label for="password">Password</label>
+                </div>
+                <input class="btn waves-effect waves-light blue-grey" type="submit" value="Login">
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div v-show="loggedIn" class="row">
+        <div id="addusers" class="col s10 offset-s1">
+          <div class="card blue-grey lighten-5">
+            <div class="card-content">
+              <span class="card-title">Single user</span>
+              <form id="addsingleuser" v-on:submit.prevent="addsingleuser" class="row">
+                <div class="input-field col s12">
+                  <input type="text" placeholder="User ID" name="userid" id="userid">
+                  <label for="userid">User ID</label>
+                </div>
+                <div class="input-field col s12">
+                  <input type="text" placeholder="Name" name="username" id="username">
+                  <label for="username">Name</label>
+                </div>
+                <div class="input-field col s12">
+                  <input type="email" placeholder="Email" name="email" id="email">
+                  <label for="email">Email</label>
+                </div>
+                <div class="input-field col s7">
+                  <input type="text" placeholder="Password" name="password" id="user-password" v-bind:disabled="autogenpass">
+                  <label for="user-password">Password</label>
+                </div>
+                <p class="col s5">
+                  <input type="checkbox" id="autogenpass" v-model="autogenpass"/>
+                  <label for="autogenpass">Generate password</label>
+                </p>
+                <div class="col s12">
+                  <input name="gender" type="radio" id="gender_male" value="m"/>
+                  <label for="gender_male">Male</label>
+                  &nbsp;
+                  <input name="gender" type="radio" id="gender_female" value="f"/>
+                  <label for="gender_female">Female</label>
+                </div>
+                <div class="input-field col s12">
+                  <input name="dob" type="text" class="datepicker" id="dob">
+                  <label for="dob">D.O.B.</label>
+                </div>
+                <div class="col s4">
+                  <input class="btn waves-effect waves-light blue-grey" type="submit" value="Add user">
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="card blue-grey lighten-5">
+            <div class="card-content">
+              <span class="card-title">Multiple users (By file)</span>
+              <p>
+                Format of entry: [id], [name], [email], [password], [gender], [dob]<br />
+                One entry per newline.
+              </p>
+              <form id="addmultipleusers" v-on:submit.prevent="addmultipleusers" class="row">
+                <div class="file-field input-field">
+                  <div class="btn blue-grey">
+                    <span><i class="material-icons left">file_upload</i>Upload</span>
+                    <input type="file" id="userfile" name="userfile" accept=".csv">
+                  </div>
+                  <div class="file-path-wrapper">
+                    <input class="file-path validate" type="text">
+                  </div>
+                </div>
+                <input class="btn waves-effect waves-light blue-grey" type="submit" value="Add mulitple users">
+              </form>
+            </div>
+          </div>
+        </div>
+        <div id="queryuser" class="col s10 offset-s1">
+          <div class="card blue-grey lighten-5">
+            <div class="card-content">
+              <form v-on:submit.prevent="queryuser" class="row">
+                <div class="row">
+                  <div class="input-field">
+                    <input type="text" placeholder="User ID" name="userid" id="queryuserid">
+                    <label for="userid">User ID</label>
+                  </div>
+                </div>
+                <input class="btn waves-effect waves-light blue-grey" type="submit" value="Query user">
+              </form>
+              <form v-show="query_name" v-on:submit.prevent="updateuser" class="row">
+                <div class="row">
+                  <div class="input-field col s12">
+                    <input type="text" placeholder="Name" name="username" id="query_username" v-model="query_name">
+                    <label for="query_username">Name</label>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="input-field col s12">
+                    <input type="email" placeholder="Email" name="email" id="query_email" v-model="query_email">
+                    <label for="query_email">Email</label>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="input-field col s7">
+                    <input type="text" placeholder="Password" name="password" id="query_user-password">
+                    <label for="query_user-password">Password</label>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="col s12">
+                    <input name="querygender" type="radio" id="query_gender_male" value="m" v-model="query_gender"/>
+                    <label for="query_gender_male">Male</label>
+                    &nbsp;
+                    <input name="querygender" type="radio" id="query_gender_female" value="f" v-model="query_gender"/>
+                    <label for="query_gender_female">Female</label>
+                  </div>
+                </div>
+                <div class="row">
+                  <div class="input-field col s12">
+                    <input name="dob" type="text" class="datepicker" id="query_dob" v-model="query_dob">
+                    <label for="query_dob">D.O.B.</label>
+                  </div>
+                </div>
+                <input class="btn waves-effect waves-light blue-grey" type="submit" value="Update user">
+                <a class="btn waves-effect waves-light blue-grey" v-on:click="deleteuser">Delete user</a>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div id="channels" class="col s10 offset-s1">
+          channels
+        </div>
+      </div>
+      <div id="err_box_container" v-show="loggedIn" class="row">
+        <div class="col s10 offset-s1">
+          <div id="err_box" class="card-panel blue-grey lighten-5 err_box">
+            <span class="black-text">
+              <pre>{{err_messages}}</pre>
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/vue"></script>
+    <script src="https://unpkg.com/vue-resource@1.3.4/dist/vue-resource.min.js"></script>
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/materialize/0.100.2/js/materialize.min.js"></script>
+    <script type="text/javascript" src="./assets/js/js-cookie.js"></script>
+    <script type="text/javascript" src="./assets/js/index.js"></script>
+  </body>
+</html>

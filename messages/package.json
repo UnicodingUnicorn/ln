@@ -1,0 +1,21 @@
+{
+  "name": "messages",
+  "version": "1.0.0",
+  "description": "Non-socket messaging-related service",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "orcas",
+  "license": "ISC",
+  "dependencies": {
+    "body-parser": "^1.17.2",
+    "colors": "^1.1.2",
+    "cors": "^2.8.4",
+    "couchdb-creator": "^1.0.3",
+    "express": "^4.15.4",
+    "express-bearer-token": "^2.1.0",
+    "jsonwebtoken": "^7.4.3",
+    "nano": "^6.4.0"
+  }
+}

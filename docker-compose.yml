@@ -1,0 +1,127 @@
+version: "3"
+services:
+  couchdb:
+    image: couchdb:latest
+    environment:
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "5984:5984" #Open temporarily for debugging
+    networks:
+      - couchnet
+  memcached:
+    image: memcached
+    networks:
+      - memnet
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+    networks:
+      - minionet
+    environment:
+      - MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+      - MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY
+    volumes:
+      - ./minio:/export
+    command: minio server /export
+  admin:
+    build: ./admin
+    tty: true
+    environment:
+      - ADMIN_PORT=10201
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "10201:10201"
+    depends_on:
+      - couchdb
+    networks:
+      - couchnet
+  openid:
+    build: ./openid
+    tty: true
+    environment:
+      - OPENID_PORT=10202
+      - ISS=localhost
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "10202:10202"
+    depends_on:
+      - couchdb
+      - memcached
+    networks:
+      - couchnet
+      - memnet
+  web:
+    image: httpd
+    volumes:
+      - ./web/dist:/usr/local/apache2/htdocs/
+    ports:
+      - "10200:80"
+  chat:
+    build: ./chat
+    environment:
+      - SOCKETCLUSTER_PORT=10203
+      - SECRET=H1o8nmd_-
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "10203:10203"
+    depends_on:
+      - couchdb
+    networks:
+      - couchnet
+  messages:
+    build: ./messages
+    tty: true
+    environment:
+      - MESSAGES_PORT=10204
+      - SECRET=H1o8nmd_-
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "10204:10204"
+    depends_on:
+      - couchdb
+    networks:
+      - couchnet
+  admin-frontend:
+    image: httpd
+    volumes:
+      - ./admin-frontend:/usr/local/apache2/htdocs/
+    ports:
+      - "10205:80"
+  accounts:
+    build: ./accounts
+    tty: true
+    environment:
+      - ACCOUNTS_PORT=10206
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+      - SECRET=H1o8nmd_-
+    ports:
+      - "10206:10206"
+    depends_on:
+      - couchdb
+    networks:
+      - couchnet
+  files:
+    build: ./files
+    tty: true
+    environment:
+      - FILES_PORT=10207
+      - MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
+      - MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY
+      - SECRET=H1o8nmd_-
+    ports:
+      - "10207:10207"
+    depends_on:
+      - minio
+    networks:
+      - minionet
+networks:
+  couchnet:
+  memnet:
+  minionet:

@@ -1,0 +1,65 @@
+Basic channels:
+✔ Basic channels @done(2017-09-05 11:42)
+✔ Default channel @done(2017-09-25 00:35)
+☐ Channel modification
+☐ Add users to channel
+Admin UI:
+✔ Admin Verification/Accounts (Use couchdb) @done(2017-09-18 16:25)
+✔ Check for missing params in API @done(2017-09-18 16:25)
+☐ Admin UI
+✔ Proper (mass) user creation utility (from file) @done(2017-09-18 16:25)
+☐ SSL serving
+☐ SSL for Admin API
+☐ Admin channels
+☐ Initial channels on adding user
+Frontend improvements:
+✔ Scrolling chat @done(2017-09-08 05:24)
+✔ Logout @done(2017-09-21 22:49)
+✔ Menu bar @done(2017-09-21 22:50)
+✔ Get more history @done(2017-10-05 22:31)
+✔ Universal options file (frontend) @done(2017-10-05 18:56)
+☐ Active renewal of token while online
+☐ Notifications
+✔ Replace foreach with async operations in messages module @done(2017-09-24 22:30)
+☐ User display in sidenav
+✔ favicon @done(2017-10-05 22:50)
+☐ favicon badges
+☐ Indication you are at top
+Housekeeping:
+☐ READMEs
+☐ Cleanup code
+☐ Update apidocs for admin
+☐ Apidocs for other services
+✔ Update package.json with author @done(2017-09-25 08:13)
+☐ Git repo
+☐ Options files for services
+File uploads:
+✔ Set up minio in docker-compose @done(2017-09-25 12:00)
+✔ Create API endpoint for file upload @done(2017-09-28 00:06)
+✔ Frontend support for file upload @done(2017-10-03 06:16)
+✔ File previews (images) @done(2017-10-07 07:08)
+☐ File previews (text-ish documents)
+☐ File previews (video)
+☐ File previews (audio)
+☐ Authentication for file access
+✔ Keep track of file names @done(2017-10-03 06:16)
+Chat Extensions:
+☐ Private Messaging
+☐ User search
+✔ Client side message store @done(2017-09-25 00:26)
+✔ Message object carries message type (message, file etc.) @done(2017-09-30 06:22)
+☐ Unread messages
+✔ Have date delimiters, than sequester by minutes @done(2017-10-09 13:16)
+Openid improvements
+✔ Switch to memcached @done(2017-10-03 08:19)
+✔ Display name of app in login @done(2017-10-03 06:26)
+☐ Implement rate limiting
+Accounts:
+✔ Accounts service @done(2017-09-25 00:37)
+☐ User settings
+☐ OAuth integration with popular providers (Azure, Google)
+☐ Extend user accounts (Avatars, etc.)[accounts]
+LMS Things:
+☐ New role - teacher ('t')[above admin]
+☐ Teachers can set tasks (displayed in top bar)
+☐ Tasks can have files submitted to them

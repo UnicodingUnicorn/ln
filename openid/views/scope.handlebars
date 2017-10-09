@@ -1,0 +1,10 @@
+<form method="post" action="">
+  <h3>The application will like to access:</h3>
+  {{#each perms}}
+    <p>
+      <input type="checkbox" id="{{this}}" class="filled-in" checked="checked" disabled="disabled">
+      <label for="{{this}}">{{this}}</label>
+    </p>
+  {{/each}}
+  <input class="waves-effect waves-light btn" type="submit" value="Confirm">
+</form>
