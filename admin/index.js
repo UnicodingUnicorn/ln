@@ -4,7 +4,6 @@ var cors = require("cors");
 
 var bcrypt = require("bcrypt");
 var salt_rounds = 10;
-//var shortid = require("shortid");
 var uniqid = require("uniqid");
 
 var colors = require("colors");
@@ -43,6 +42,11 @@ var perms_design = {
     'by_user' : {
       'map' : function(doc){
         emit(doc.user, doc.channel);
+      }
+    },
+    'by_channel' : {
+      'map' : function(doc){
+        emit(doc.channel, doc.user);
       }
     }
   }
@@ -116,6 +120,10 @@ app.post("/user", getAuth, function(req, res){
     res.status(400).json({
       message : "Missing name field"
     });
+  }else if(!req.body.username){
+    res.status(400).json({
+      message : "Missing username field"
+    });
   }else if(!req.body.email){
     res.status(400).json({
       message : "Missing email field"
@@ -143,6 +151,7 @@ app.post("/user", getAuth, function(req, res){
         var user = {
           dob : req.body.dob,
           name : req.body.name,
+          username : req.body.username,
           email : req.body.email,
           gender : req.body.gender,
           password : hash
@@ -285,7 +294,8 @@ app.post("/channel", function(req, res){
   if(req.body.channel && req.body.group){
     channels.insert({
       channel : req.body.channel,
-      group : req.body.group
+      group : req.body.group,
+      users : []
     }, function(err, body){
       if(err){
         res.status(500).json({

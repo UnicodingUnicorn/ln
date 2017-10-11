@@ -31,7 +31,7 @@ Housekeeping:
 ☐ Update apidocs for admin
 ☐ Apidocs for other services
 ✔ Update package.json with author @done(2017-09-25 08:13)
-☐ Git repo
+✔ Git repo @done(2017-10-09 16:32)
 ☐ Options files for services
 File uploads:
 ✔ Set up minio in docker-compose @done(2017-09-25 12:00)
@@ -41,15 +41,19 @@ File uploads:
 ☐ File previews (text-ish documents)
 ☐ File previews (video)
 ☐ File previews (audio)
+☐ Media preloaders
 ☐ Authentication for file access
 ✔ Keep track of file names @done(2017-10-03 06:16)
 Chat Extensions:
+☐ Usernames
 ☐ Private Messaging
 ☐ User search
 ✔ Client side message store @done(2017-09-25 00:26)
 ✔ Message object carries message type (message, file etc.) @done(2017-09-30 06:22)
 ☐ Unread messages
 ✔ Have date delimiters, than sequester by minutes @done(2017-10-09 13:16)
+☐ Sign login token
+☐ Centralised channel entry
 Openid improvements
 ✔ Switch to memcached @done(2017-10-03 08:19)
 ✔ Display name of app in login @done(2017-10-03 06:26)

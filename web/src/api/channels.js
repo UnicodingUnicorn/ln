@@ -3,19 +3,19 @@ import options from '../options';
 import Vue from 'vue';
 import Resource from 'vue-resource';
 
+import toastr from 'toastr'
+
 Vue.use(Resource);
 
 export default{
-  getChannels(token, cb, err_cb){
+  getChannels(token, cb){
     Vue.http.get(options.MESSAGES_URL + '/channels', {
       headers : {'Authorization' : 'Bearer ' + token}
     }).then(
       res => {
         cb(res.body);
       }, res => {
-        console.log(res);
-        console.log(res.body);
-        cb([]);
+        toastr.error(res.body.message);
       }
     );
   }

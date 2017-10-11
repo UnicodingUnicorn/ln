@@ -22,7 +22,7 @@ const actions = {
   },
   logout({commit, state}){
     Cookies.remove('token');
-    Cookies.remove('nonce');
+    Cookies.remove('gc');
     commit(types.LOGOUT);
   }
 }

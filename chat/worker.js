@@ -40,6 +40,11 @@ var perms_design = {
       'map' : function(doc){
         emit(doc.user, doc.channel);
       }
+    },
+    'by_channel' : {
+      'map' : function(doc){
+        emit(doc.channel, doc.user);
+      }
     }
   }
 };
@@ -143,6 +148,10 @@ module.exports.run = function (worker) {
           });
         }
       });
+    });
+    socket.on('logout', function(data, respond){
+      socket.deauthenticate();
+      respond();
     });
   });
 };

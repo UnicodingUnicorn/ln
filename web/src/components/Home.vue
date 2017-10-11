@@ -24,7 +24,7 @@
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
-            <span class="title">{{m2.user}}</span>
+            <span class="title">{{users[m2.user].username}}</span>
             <p v-for="m3 in m2.messages">
               <span v-if="m2.type == 'm'">{{m3}}</span>
               <span v-else-if="m2.type == 'f'">
@@ -36,7 +36,7 @@
           </li>
         </ul>
       </div>
-      <a class="btn-floating waves-effect waves-light right red modal-trigger" href="#attachment-modal"><i class="material-icons">attach_file</i></a>
+      <div class="fixed-action-btn"><a class="btn-floating waves-effect waves-light right red modal-trigger" href="#attachment-modal"><i class="material-icons">attach_file</i></a></div>
       <form v-on:submit.prevent="send" class="entry">
         <div class="input-field">
           <input type="text" placeholder="Enter your message..." v-model="message">
@@ -107,7 +107,8 @@
       ...mapGetters({
         token : 'user_token',
         channels : 'channels',
-        messages : 'messages'
+        messages : 'messages',
+        users : 'users'
       })
     },
     watch : {
@@ -122,8 +123,15 @@
         Cookies.set('gc', {group : this.group, channel : this.channel});
       },
       logout : function(event){
-        this.$store.dispatch('logout');
-        this.$router.go(this.$router.currentRoute);
+        this.channels.forEach(function(gc){
+          gc.channels.forEach(function(channel){
+            socket.unsubscribe(gc.group + '+' + channel);
+          });
+        });
+        socket.emit('logout', {}, function(){
+          this.$store.dispatch('logout');
+          this.$router.go(this.$router.currentRoute);
+        }.bind(this));
       },
       render_time : messagesAPI.render_time,
       send : function(event){
@@ -254,9 +262,9 @@
     overflow-y : auto;
     max-height: 75vh;
   }
-  form.entry{
+  .entry{
     /*position : fixed;*/
-    /*bottom : 0;*/
+    bottom : 0;
     width : 100%;
     /*background-color: #FFFFFF;*/
   }

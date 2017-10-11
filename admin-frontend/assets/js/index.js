@@ -46,10 +46,12 @@ var app = new Vue({
       return !str.replace(/\s/g, '').length ? true : false;
     },
     addsingleuser : function(event){
+      console.log($('#user-username').val());
       var user_data = {
         id : $('#userid').val(),
         dob : $('#dob').val(),
         name : $('#username').val(),
+        username : $('#user-username').val(),
         email : $('#email').val(),
         gender : $('input[name=gender]').val()
       };

@@ -9,6 +9,7 @@
   "author": "orcas",
   "license": "ISC",
   "dependencies": {
+    "async": "^2.5.0",
     "bcrypt": "^1.0.3",
     "body-parser": "^1.18.1",
     "colors": "^1.1.2",

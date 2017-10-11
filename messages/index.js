@@ -36,6 +36,11 @@ var perms_design = {
       'map' : function(doc){
         emit(doc.user, doc.channel);
       }
+    },
+    'by_channel' : {
+      'map' : function(doc){
+        emit(doc.channel, doc.user);
+      }
     }
   }
 };
@@ -190,7 +195,7 @@ app.options("/by_time/:timestamp/:offset/:count", function(req, res){
   res.status(200);
 });
 app.get("/by_time/:timestamp/:offset/:count", getAuth, function(req, res){
-  
+
 });
 
 app.get("/channels", getAuth, function(req, res){
