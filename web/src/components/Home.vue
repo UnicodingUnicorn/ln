@@ -21,6 +21,13 @@
     <div v-show="token != undefined" class="chat">
       <div id="chatView" v-on:scroll="chat_scroll">
         <!-- <h6 v-show="at_max" class="center-align">You are at the top.</h6> -->
+        <div class="row" v-if="!messages[group + '+' + channel]">
+          <div class="col s4 offset-s4">
+            <div class="card-panel white">
+              <span class="cyan-text">There are no messages.</span>
+            </div>
+          </div>
+        </div>
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">

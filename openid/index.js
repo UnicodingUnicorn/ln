@@ -1,6 +1,7 @@
 var express = require("express");
 var bodyParser = require("body-parser");
 var expresshbs = require("express-handlebars");
+var cors = require("cors");
 
 var async = require("async");
 var basicauth = require("basic-auth");
@@ -9,11 +10,12 @@ var bearerToken = require("bearer-token");
 var colors = require("colors");
 var jwt = require("jsonwebtoken");
 var querystring = require("querystring");
+var request = require("request");
 var uniqid = require("uniqid");
 var url = require("url");
 
-var memcached = require("memcached");
-var mClient = new memcached('memcached:11211')
+var Memcached = require("memcached");
+var memcached = new Memcached('memcached:11211')
 
 var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
 var creator = require("couchdb-creator");
@@ -43,6 +45,7 @@ var app = express();
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended : true}));
+app.use(cors());
 
 app.use(express.static(__dirname + "/assets"));
 
@@ -50,9 +53,7 @@ app.engine('handlebars', expresshbs({defaultLayout : 'main'}));
 app.set('view engine', 'handlebars');
 
 app.get("/", function(req, res){
-  res.status(200).json({
-    message : "Received at OpenID service"
-  });
+  res.status(200).send("Received at OpenID service");
 });
 
 app.all('/authorise', function(req, res){
@@ -154,45 +155,41 @@ app.post("/authcode", function(req, res){
     scopes : req.body.scopes
   };
 
-  users.view('email', 'by_email', {include_docs : true}, function(err, body){
-    var user;
-    async.each(body.rows, function(row, cb){
-      if(row.doc.email == req.body.email)
-        user = row.doc;
-      cb();
-    }, function(cberr){
-      if(user){
-        bcrypt.compare(req.body.password, user.password, function(hash_err, result){
-          if(result == true){
-            var raw_code = {
-              user : user,
-              auth_time : (new Date()).getTime(),
-              nonce : req.body.nonce,
-              scopes : req.body.scopes
-            };
-            var code = uniqid();
-            mClient.set('ac:' + code, JSON.stringify(raw_code), 60, function(err){
-              if(req.body.redirect_uri.match(/(http:\/\/)(\w|\W)+/) == null)
-                req.body.redirect_uri = "http://" + req.body.redirect_uri;
-              else if(req.body.redirect_uri.match(/(https:\/\/)(\w|\W)+/) == null)
-                req.body.redirect_uri = "https://" + req.body.redirect_uri;
-              if(req.body.redirect_uri[req.body.redirect_uri.length - 1] == '/')
-                req.body.redirect_uri = req.body.redirect_uri.substring(0, req.body.redirect_uri.length);
-              res.render('redirect', {redirect_url : req.body.redirect_uri + '?' + querystring.stringify({
-                state : req.body.state,
-                code : code
-              }), layout : 'redirect'});
-            });
-          }else{
-            res.data.err_msg = "Invalid password";
-            res.render('code', res.data);
-          }
-        });
-      }else{
-        res.data.err_msg = "Email not found";
-        res.render('code', res.data);
-      }
-    });
+  users.view('email', 'by_email', {
+    key : req.body.email,
+    include_docs : true
+  }, function(err, body){
+    var user = body.rows[0];
+    if(user){
+      user = user.doc;
+      bcrypt.compare(req.body.password, user.password, function(hash_err, result){
+        if(result == true){
+          var raw_code = {
+            user : user,
+            auth_time : (new Date()).getTime(),
+            nonce : req.body.nonce,
+            scopes : req.body.scopes
+          };
+          var code = uniqid();
+          memcached.set('ac:' + code, JSON.stringify(raw_code), 60, function(err){
+            if(!(req.body.redirect_uri.match(/(http:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(http:\/\/)(\w|\W)+/) || req.body.redirect_uri.match(/(https:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(https:\/\/)(\w|\W)+/)))
+              req.body.redirect_uri = "http://" + req.body.redirect_uri;
+            if(req.body.redirect_uri[req.body.redirect_uri.length - 1] == '/')
+              req.body.redirect_uri = req.body.redirect_uri.substring(0, req.body.redirect_uri.length);
+            res.render('redirect', {redirect_url : req.body.redirect_uri + '?' + querystring.stringify({
+              state : req.body.state,
+              code : code
+            }), layout : 'redirect'});
+          });
+        }else{
+          res.data.err_msg = "Invalid password";
+          res.render('code', res.data);
+        }
+      });
+    }else{
+      res.data.err_msg = "Email not found";
+      res.render('code', res.data);
+    }
   });
 });
 
@@ -207,63 +204,59 @@ app.post("/implicit", function(req, res){
     scopes : req.body.scopes
   };
 
-  users.view('email', 'by_email', {include_docs : true}, function(err, body){
-    var user;
-    async.each(body.rows, function(row, cb){
-      if(row.doc.email == req.body.email)
-        user = row.doc;
-      cb();
-    }, function(cberr){
-      if(user){
-        bcrypt.compare(req.body.password, user.password, function(hash_err, result){
-          if(result == true){
-            res.set({
-              'Cache-Control' : 'no-store',
-              'Pragma' : 'no-cache'
-            });
-            var now = (new Date()).getTime();
-            var id_token = {
-              iss : iss,
-              sub : user._id,
-              aud : req.body.client_id,
-              exp : now + 10 * 60 * 1000,
-              iat : now,
-              auth_time : (new Date()).getTime(),
-              nonce : req.body.nonce
-            };
+  users.view('email', 'by_email', {
+    key : req.body.email,
+    include_docs : true
+  }, function(err, body){
+    var user = body.rows[0];
+    if(user){
+      user = user.doc;
+      bcrypt.compare(req.body.password, user.password, function(hash_err, result){
+        if(result == true){
+          res.set({
+            'Cache-Control' : 'no-store',
+            'Pragma' : 'no-cache'
+          });
+          var now = (new Date()).getTime();
+          var id_token = {
+            iss : iss,
+            sub : user._id,
+            aud : req.body.client_id,
+            exp : now + 10 * 60 * 1000,
+            iat : now,
+            auth_time : (new Date()).getTime(),
+            nonce : req.body.nonce
+          };
 
-            var access_token = uniqid();
-            mClient.set('id:' + access_token, jwt.sign({
-              sub : user._id,
-              scopes : req.body.scopes
-            }, access_token), 60, function(err){
-              if(req.body.redirect_uri.match(/(http:\/\/)(\w|\W)+/) == null)
-                req.body.redirect_uri = "http://" + req.body.redirect_uri;
-              else if(req.body.redirect_uri.match(/(https:\/\/)(\w|\W)+/) == null)
-                req.body.redirect_uri = "https://" + req.body.redirect_uri;
-              if(req.body.redirect_uri[req.body.redirect_uri.length - 1] == '/')
-                req.body.redirect_uri = req.body.redirect_uri.substring(0, req.body.redirect_uri.length);
-              clients.get(req.body.client_id, function(cg_err, client){
-                res.render('redirect', {redirect_url : req.body.redirect_uri + '?' + querystring.stringify({
-                  state : req.body.state,
-                  access_token : access_token,
-                  id_token : jwt.sign(id_token, client.secret),
-                  token_type : "Bearer",
-                  expires_in : 10 * 60 * 1000,
-                  nonce : req.body.nonce
-                }), layout : 'redirect'});
-              });
+          var access_token = uniqid();
+          memcached.set('id:' + access_token, jwt.sign({
+            sub : user._id,
+            scopes : req.body.scopes
+          }, access_token), 60, function(err){
+            if(!(req.body.redirect_uri.match(/(http:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(http:\/\/)(\w|\W)+/) || req.body.redirect_uri.match(/(https:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(https:\/\/)(\w|\W)+/)))
+              req.body.redirect_uri = "http://" + req.body.redirect_uri;
+            if(req.body.redirect_uri[req.body.redirect_uri.length - 1] == '/')
+              req.body.redirect_uri = req.body.redirect_uri.substring(0, req.body.redirect_uri.length);
+            clients.get(req.body.client_id, function(cg_err, client){
+              res.render('redirect', {redirect_url : req.body.redirect_uri + '?' + querystring.stringify({
+                state : req.body.state,
+                access_token : access_token,
+                id_token : jwt.sign(id_token, client.secret),
+                token_type : "Bearer",
+                expires_in : 10 * 60 * 1000,
+                nonce : req.body.nonce
+              }), layout : 'redirect'});
             });
-          }else{
-            res.data.err_msg = "Invalid password";
-            res.render('implicit', res.data);
-          }
-        });
-      }else{
-        res.data.err_msg = "Email not found";
-        res.render('implicit', res.data);
-      }
-    });
+          });
+        }else{
+          res.data.err_msg = "Invalid password";
+          res.render('implicit', res.data);
+        }
+      });
+    }else{
+      res.data.err_msg = "Email not found";
+      res.render('implicit', res.data);
+    }
   });
 });
 
@@ -285,8 +278,8 @@ app.post("/token", function(req, res){
         }, function(err){
           if(redirect_uri){
             if(req.body.grant_type == 'authorization_code' || req.body.grant_type == 'authorisation_code'){
-              mClient.get('ac:' + req.body.code, function(r_err, code_body){
-                mClient.del('ac:' + req.body.code, function(del_err){
+              memcached.get('ac:' + req.body.code, function(r_err, code_body){
+                memcached.del('ac:' + req.body.code, function(del_err){
                   if(code_body != undefined){
                     res.set({
                       'Cache-Control' : 'no-store',
@@ -305,7 +298,7 @@ app.post("/token", function(req, res){
                     };
 
                     var access_token = uniqid();
-                    mClient.set('id:' + access_token, jwt.sign({
+                    memcached.set('id:' + access_token, jwt.sign({
                       sub : code_body.user._id,
                       scopes : code_body.scopes
                     }, access_token), 60, function(set_iderr){
@@ -356,7 +349,7 @@ app.get("/userinfo", function(req, res){
         error_description : "Invalid Bearer Auth"
       });
     }else{
-      mClient.get('id:' + token, function(m_err, id_token){
+      memcached.get('id:' + token, function(m_err, id_token){
         if(m_err){
           res.status(401).json({
             error : "invalid_token",
@@ -394,6 +387,39 @@ app.get("/userinfo", function(req, res){
       });
     }
   });
+});
+
+app.options('/verify/:token/:target_url', cors());
+app.all('/verify/:token/:target_url', function(req, res){
+  if(req.params.target_url){
+    var auth = basicauth(req);
+    if(auth){
+      clients.get(auth.name, function(get_err, client){
+        if(get_err){
+          res.status(403).send("Forbidden");
+        }else{
+          if(client.secret === auth.pass){
+            jwt.verify(req.params.token, client.secret, function(ver_err, decoded){
+              if(ver_err){
+                res.status(403).send("Forbidden");
+              }else{
+                req.headers['User'] = decoded.sub;
+                req.pipe(request(req.params.target_url).on('error', function(err){
+                  res.status(404).send("Not found");
+                })).pipe(res);
+              }
+            });
+          }else{
+            res.status(403).send("Forbidden");
+          }
+        }
+      });
+    }else{
+      res.status(401).send("No client auth header");
+    }
+  }else{
+    res.status(404).send("Target not found");
+  }
 });
 
 app.listen(process.env.OPENID_PORT, function(err){

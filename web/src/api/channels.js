@@ -1,4 +1,5 @@
 import options from '../options';
+import auth from './auth';
 
 import Vue from 'vue';
 import Resource from 'vue-resource';
@@ -9,8 +10,8 @@ Vue.use(Resource);
 
 export default{
   getChannels(token, cb){
-    Vue.http.get(options.MESSAGES_URL + '/channels', {
-      headers : {'Authorization' : 'Bearer ' + token}
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/channels'), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
     }).then(
       res => {
         cb(res.body);

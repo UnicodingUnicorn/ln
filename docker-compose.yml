@@ -121,6 +121,19 @@ services:
       - minio
     networks:
       - minionet
+  permissions:
+    build: ./permissions
+    tty: true
+    environment:
+      - PERMISSIONS_PORT=10208
+      - COUCHDB_USER=admin
+      - COUCHDB_PASSWORD=password
+    ports:
+      - "10208:10208"
+    depends_on:
+      - couchdb
+    networks:
+      - couchnet
 networks:
   couchnet:
   memnet:

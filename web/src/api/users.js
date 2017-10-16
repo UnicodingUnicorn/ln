@@ -3,6 +3,7 @@ import Resource from 'vue-resource';
 
 import toastr from 'toastr';
 
+import auth from "./auth";
 import options from '../options';
 
 Vue.use(Resource);
@@ -19,8 +20,8 @@ export default{
     });
   },
   get_users(gc, token, cb){
-    Vue.http.get(options.ACCOUNTS_URL + '/users/' + gc, {
-      headers : {'Authorization' : 'Bearer ' + token},
+    Vue.http.get(auth.withAuth(token, options.ACCOUNTS_URL + '/users/' + JSON.stringify(gc)), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
       function(res){

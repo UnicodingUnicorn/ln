@@ -21,10 +21,8 @@ const actions = {
       channel_api.getChannels(token, function(ch){
         var raw_channels = {};
         async.eachSeries(ch, function(channel, cb){
-          var group = channel.split('+')[0];
-          var channel = channel.split('+')[1];
-          raw_channels[group] ? raw_channels[group].push(channel) : raw_channels[group] = [channel];
-          user_api.get_users(group + '+' + channel, token, function(users){
+          raw_channels[channel.group] ? raw_channels[channel.group].push(channel.channel) : raw_channels[channel.group] = [channel.channel];
+          user_api.get_users(channel, token, function(users){
             commit(types.ADD_USERS, users);
             cb();
           });

@@ -16,7 +16,7 @@ var messages_design = {
   'views' : {
     'by_channel' : {
       'map' : function(doc){
-        emit(doc.channel, doc._id);
+        emit([doc.channel.group, doc.channel.channel], doc._id);
       }
     }
   }
@@ -46,6 +46,34 @@ var perms_design = {
 };
 creator(nano, 'perms', {name : 'perms', doc : perms_design}, function(db){
   perms = db;
+});
+var permissions_design = {
+  'views' : {
+    'by_user_action' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action], doc.value);
+      }
+    },
+    'by_user_action_scope' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action, doc.scope], doc.value);
+      }
+    },
+    'by_user' : {
+      'map' : function(doc){
+        emit(doc.user, doc.value);
+      }
+    },
+    'by_action_scope' : {
+      'map' : function(doc){
+        emit([doc.action, doc.scope], doc.value);
+      }
+    }
+  }
+};
+var permissions;
+creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
+  permissions = db;
 });
 
 var app = express();
@@ -93,22 +121,17 @@ app.get("/", function(req, res){
 app.options("/messages/:channel/:count", function(req, res){
   res.status(200);
 });
-app.get("/messages/:channel/:count", getAuth, function(req, res){
-  perms.view("perms", "by_perm", {
-    key : [req.decoded.sub, req.params.channel],
-    include_docs : true
-  }, function(perm_err, role){
-    if(perm_err){
-      res.status(400).json({
-        messages : "No permissions"
-      });
-    }else{
-      if(role.rows[0].value.match(/[rwa]/)){
+app.get("/messages/:channel/:count", function(req, res){
+  if(req.get('User')){
+    var gc = JSON.parse(req.params.channel);
+    permissions.view("permissions", "by_user_action_scope", {
+      key : [req.get('User'), 'view_channel', gc]
+    }, function(view_err, channels){
+      if(channels.rows[0]){
         messages.view("messages", "by_channel", {
-          key : req.params.channel,
+          key : [gc.group, gc.channel],
           include_docs : true,
-          limit : req.params.count,
-          descending : true
+          limit : req.params.count
         }, function(err, body){
           if(err){
             res.status(200).json({});
@@ -126,40 +149,39 @@ app.get("/messages/:channel/:count", getAuth, function(req, res){
               if(iter_err){
                 res.status(200).json({});
               }else{
-                res.status(200).json(messages_data.reverse());
+                res.status(200).json(messages_data);
               }
             });
           }
         });
       }else{
-        res.status(400).json({
-          message : "No permissions"
+        res.status(404).json({
+          message : 'No channel found'
         });
       }
-    }
-  });
+    });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
 });
 
 app.options("/messages/:channel/:offset/:count", function(req, res){
   res.status(200);
 });
-app.get("/messages/:channel/:offset/:count", getAuth, function(req, res){
-  perms.view("perms", "by_perm", {
-    key : [req.decoded.sub, req.params.channel],
-    include_docs : true
-  }, function(perm_err, role){
-    if(perm_err){
-      res.status(400).json({
-        messages : "No permissions"
-      });
-    }else{
-      if(role.rows[0].value.match(/[rwa]/)){
+app.get("/messages/:channel/:offset/:count", function(req, res){
+  if(req.get('User')){
+    var gc = JSON.parse(req.params.channel);
+    permissions.view("permissions", "by_user_action_scope", {
+      key : [req.get('User'), 'view_channel', gc]
+    }, function(view_err, channels){
+      if(channels.rows[0]){
         messages.view("messages", "by_channel", {
-          key : req.params.channel,
+          key : [gc.group, gc.channel],
           include_docs : true,
           limit : req.params.count,
-          skip : req.params.offset,
-          descending : true
+          skip : req.params.offset
         }, function(err, body){
           if(err){
             res.status(200).json({});
@@ -177,40 +199,89 @@ app.get("/messages/:channel/:offset/:count", getAuth, function(req, res){
               if(iter_err){
                 res.status(200).json({});
               }else{
-                res.status(200).json(messages_data.reverse());
+                res.status(200).json(messages_data);
               }
             });
           }
         });
       }else{
-        res.status(400).json({
-          messages : "No permissions"
+        res.status(404).json({
+          message : 'No channel found'
         });
       }
-    }
-  });
-});
-
-app.options("/by_time/:timestamp/:offset/:count", function(req, res){
-  res.status(200);
-});
-app.get("/by_time/:timestamp/:offset/:count", getAuth, function(req, res){
-
-});
-
-app.get("/channels", getAuth, function(req, res){
-  perms.view("perms", "by_user", {
-    key : req.decoded.sub,
-    include_docs : true
-  }, function(view_err, channels){
-    var return_channels = [];
-    async.each(channels.rows, function(channel, cb){
-      return_channels.push(channel.value);
-      cb();
-    }, function(err){
-      res.status(200).json(return_channels);
     });
-  });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
+
+
+  // perms.view("perms", "by_perm", {
+  //   key : [req.decoded.sub, req.params.channel],
+  //   include_docs : true
+  // }, function(perm_err, role){
+  //   if(perm_err){
+  //     res.status(400).json({
+  //       messages : "No permissions"
+  //     });
+  //   }else{
+  //     if(role.rows[0].value.match(/[rwa]/)){
+  //       messages.view("messages", "by_channel", {
+  //         key : req.params.channel,
+  //         include_docs : true,
+  //         limit : req.params.count,
+  //         skip : req.params.offset,
+  //         descending : true
+  //       }, function(err, body){
+  //         if(err){
+  //           res.status(200).json({});
+  //         }else{
+  //           var messages_data = [];
+  //           async.each(body.rows, function(message, cb){
+  //             messages_data.push({
+  //               user : message.doc.user,
+  //               datetime : message.doc.datetime,
+  //               message : message.doc.message,
+  //               type : message.doc.type
+  //             });
+  //             cb();
+  //           }, function(iter_err){
+  //             if(iter_err){
+  //               res.status(200).json({});
+  //             }else{
+  //               res.status(200).json(messages_data.reverse());
+  //             }
+  //           });
+  //         }
+  //       });
+  //     }else{
+  //       res.status(400).json({
+  //         messages : "No permissions"
+  //       });
+  //     }
+  //   }
+  // });
+});
+
+app.get("/channels", function(req, res){
+  if(req.get('User')){
+    permissions.view("permissions", "by_user_action", {
+      key : [req.get('User'), 'view_channel']
+    }, function(view_err, channels){
+      var return_channels = [];
+      async.each(channels.rows, function(channel, cb){
+        return_channels.push(channel.value);
+        cb();
+      }, function(err){
+        res.status(200).json(return_channels);
+      });
+    });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
 });
 
 app.listen(process.env.MESSAGES_PORT, function(err){

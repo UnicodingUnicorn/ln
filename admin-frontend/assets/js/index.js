@@ -14,7 +14,9 @@ var app = new Vue({
     query_name : '',
     query_email : '',
     query_dob : '',
-    query_gender : ''
+    query_gender : '',
+    query_channelgroup : '',
+    query_channelchannel : ''
   },
   computed : {
     loggedIn : function(){
@@ -64,7 +66,7 @@ var app = new Vue({
       }
       this.$http.post(ADMIN_URL + '/user', user_data, {
         headers : {
-          Authorization : 'Basic ' + this.user_id + ':' + this.password
+          Authorization : 'Basic ' + btoa(this.user_id + ':' + this.password)
         },
         emulateJSON : true
       }).then(
@@ -137,7 +139,7 @@ var app = new Vue({
                 }
                 this.$http.post(ADMIN_URL + '/user', user_data, {
                   headers : {
-                    Authorization : 'Basic ' + this.user_id + ':' + this.password
+                    Authorization : 'Basic ' + btoa(this.user_id + ':' + this.password)
                   },
                   emulateJSON : true
                 }).then(
@@ -190,7 +192,7 @@ var app = new Vue({
       };
       this.$http.post(ACCOUNTS_URL + '/user/' + $('#queryuserid').val(), user_data, {
         headers : {
-          Authorization : 'Basic ' + this.user_id + ':' + this.password
+          Authorization : 'Basic ' + btoa(this.user_id + ':' + this.password)
         },
         emulateJSON : true
       }).then(
@@ -227,6 +229,27 @@ var app = new Vue({
       this.query_dob = '';
       $('#query_dob').pickadate('picker').clear();
       this.query_gender = '';
+    },
+    updateusergroup : function(event){
+      this.$http.post(ADMIN_URL + '/channel/user', {
+        user : $('#queryuserid').val(),
+        group : this.query_channelgroup,
+        channel : this.query_channelchannel
+      }, {
+        headers : {
+          Authorization : 'Basic ' + btoa(this.user_id + ':' + this.password)
+        },
+        emulateJSON : true
+      }).then(
+        function(res){
+          this.new_err("Successfully added to channel");
+          this.query_channelgroup = '';
+          this.query_channelchannel = '';
+        },
+        function(res){
+          this.new_err("Err: " + res.body.message);
+        }
+      );
     }
   },
   mounted : function(){

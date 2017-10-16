@@ -2,6 +2,7 @@ var host = "192.168.99.100";
 
 export default {
   CLIENT_ID : '406z041j8k0erjm',
+  CLIENT_SECRET : 'H1o8nmd_-',
   HISTORY_COUNT : 50,
   SELF_URL : host + ":10200",
   OPENID_URL : "http://" + host + ":10202",

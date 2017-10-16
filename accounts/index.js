@@ -48,6 +48,47 @@ var perms_design = {
 creator(nano, 'perms', {name : 'perms', doc : perms_design}, function(db){
   perms = db;
 });
+var permissions_design = {
+  'views' : {
+    'by_user_action' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action], doc.value);
+      }
+    },
+    'by_user_action_scope' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action, doc.scope], doc.value);
+      }
+    },
+    'by_user' : {
+      'map' : function(doc){
+        emit(doc.user, doc._id);
+      }
+    },
+    'by_action_scope' : {
+      'map' : function(doc){
+        emit([doc.action, doc.scope], doc.value);
+      }
+    }
+  }
+};
+var permissions;
+creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
+  permissions = db;
+});
+var channels_design = {
+  'views' : {
+    'by_group_channel' : {
+      'map' : function(doc){
+        emit([doc.group, doc.channel], doc._id);
+      }
+    }
+  }
+}
+var channels;
+creator(nano, 'channels', {name : 'channels', doc : channels_design}, function(db){
+  channels = db;
+});
 
 var app = express();
 app.use(bodyParser.json());
@@ -155,69 +196,64 @@ app.post("/user/:id", getAuth, function(req, res){
   }
 });
 
-app.get('/users/:channel', getAuth, function(req, res){
-  perms.view("perms", "by_perm", {
-    key : [req.decoded.sub, req.params.channel],
-    include_docs : true
-  }, function(perm_err, role){
-    if(perm_err){
-      res.status(400).json({
-        messages : "No permissions"
-      });
-    }else{
-      if(role.rows[0].value.match(/[rwa]/)){
-        perms.view("perms", "by_channel", {
-          key : req.params.channel,
+app.get('/users/:channel', function(req, res){
+  if(req.get('User')){
+    var gc = JSON.parse(req.params.channel);
+    permissions.view('permissions', 'by_user_action_scope', {
+      key : [req.get('User'), 'view_channel', gc]
+    }, function(view_err, channel_users){
+      if(channel_users.rows[0]){
+        channels.view('channels', 'by_group_channel', {
+          key : [gc.group, gc.channel],
           include_docs : true
-        }, function(retrieve_err, channel_perms){
-          if(retrieve_err){
-            res.status(500).json({
-              message : retrieve_err.message
-            });
-          }else{
-            var usernames = [];
-            async.each(channel_perms.rows, function(user, cb){
-              usernames.push(user.value);
-              cb();
-            }, function(){
-              var user_full = {};
-              async.each(usernames, function(username, cb2){
-                users.get(username, function(get_err, indiv_user){
-                  if(get_err){
-                    cb2(get_err.message);
-                  }else{
-                    user_full[username] = {
-                      name : indiv_user.name,
-                      username : indiv_user.username,
-                      email : indiv_user.email,
-                      dob : indiv_user.dob,
-                      gender : indiv_user.gender
-                    };
-                    cb2();
-                  }
-                });
-              }, function(get_err){
+        }, function(chan_err, channel){
+          console.log(channel.rows[0].doc);
+          if(channel.rows[0]){
+            var full_users = {};
+            async.each(channel.rows[0].doc.users, function(user_id, cb){
+              users.get(user_id, function(get_err, indiv_user){
                 if(get_err){
-                  res.status(500).json({
-                    message : get_err
-                  });
+                  cb(get_err.message);
                 }else{
-                  res.status(200).json({
-                    message : "Success",
-                    users : user_full
-                  });
+                  full_users[user_id] = {
+                    name : indiv_user.name,
+                    username : indiv_user.username,
+                    email : indiv_user.email,
+                    dob : indiv_user.dob,
+                    gender : indiv_user.gender
+                  };
+                  cb();
                 }
               });
+            }, function(err){
+              if(err){
+                res.status(500).json({
+                  message : err.message
+                });
+              }else{
+                res.status(200).json({
+                  message : 'Success',
+                  users : full_users
+                });
+              }
+            });
+          }else{
+            res.status(404).json({
+              message : "Channel not found"
             });
           }
         });
       }else{
-        res.status(403).json({
-          message : "No permissions"
+        res.status(404).json({
+          message : "Channel not found"
         });
       }
-    }
-  });
+    });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
 });
 
 app.listen(process.env.ACCOUNTS_PORT, function(err){

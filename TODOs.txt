@@ -8,10 +8,11 @@ Admin UI:
 ✔ Check for missing params in API @done(2017-09-18 16:25)
 ☐ Admin UI
 ✔ Proper (mass) user creation utility (from file) @done(2017-09-18 16:25)
-☐ SSL serving
+☐ SSL serving (Caddy)
 ☐ SSL for Admin API
-☐ Admin channels
-☐ Initial channels on adding user
+☐ Admin add channel
+☐ Admin query channel
+✔ Initial channels on adding user @done(2017-10-16 11:04)
 Frontend improvements:
 ✔ Scrolling chat @done(2017-09-08 05:24)
 ✔ Logout @done(2017-09-21 22:49)
@@ -33,6 +34,9 @@ Housekeeping:
 ✔ Update package.json with author @done(2017-09-25 08:13)
 ✔ Git repo @done(2017-10-09 16:32)
 ☐ Options files for services
+☐ Write DDL and bash run script to copy over pre docker-compose
+✔ Redo permissions system @done(2017-10-16 22:14)
+☐ Secure user header
 File uploads:
 ✔ Set up minio in docker-compose @done(2017-09-25 12:00)
 ✔ Create API endpoint for file upload @done(2017-09-28 00:06)
@@ -45,7 +49,7 @@ File uploads:
 ☐ Authentication for file access
 ✔ Keep track of file names @done(2017-10-03 06:16)
 Chat Extensions:
-☐ Usernames
+✔ Usernames @done(2017-10-11 20:43)
 ☐ Private Messaging
 ☐ User search
 ✔ Client side message store @done(2017-09-25 00:26)
@@ -53,7 +57,6 @@ Chat Extensions:
 ☐ Unread messages
 ✔ Have date delimiters, than sequester by minutes @done(2017-10-09 13:16)
 ☐ Sign login token
-☐ Centralised channel entry
 Openid improvements
 ✔ Switch to memcached @done(2017-10-03 08:19)
 ✔ Display name of app in login @done(2017-10-03 06:26)
@@ -62,7 +65,7 @@ Accounts:
 ✔ Accounts service @done(2017-09-25 00:37)
 ☐ User settings
 ☐ OAuth integration with popular providers (Azure, Google)
-☐ Extend user accounts (Avatars, etc.)[accounts]
+☐ Extend user accounts (Avatars)[accounts]
 LMS Things:
 ☐ New role - teacher ('t')[above admin]
 ☐ Teachers can set tasks (displayed in top bar)

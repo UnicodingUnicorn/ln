@@ -175,6 +175,26 @@
               </form>
             </div>
           </div>
+          <div class="card blue-grey lighten-5" v-show="query_name">
+            <div class="card-content">
+              <span class="card-title">Add to channel</span>
+              <form v-on:submit.prevent="updateusergroup">
+                <div class="row">
+                  <div class="input-field col s5">
+                    <input type="text" placeholder="Group" name="group" id="query_channelgroup" v-model="query_channelgroup">
+                    <label for="query_channelgroup">Group</label>
+                  </div>
+                  <div class="input-field col s5">
+                    <input type="text" placeholder="Channel" name="channel" id="query_channelchannel" v-model="query_channelchannel">
+                    <label for="query_channelchannel">Channel</label>
+                  </div>
+                  <div class="input-field col s2">
+                    <input class="btn waves-effect waves-light blue-grey" type="submit" value="Add">
+                  </div>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
         <div id="channels" class="col s10 offset-s1">
           channels

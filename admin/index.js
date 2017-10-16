@@ -2,6 +2,7 @@ var express = require("express");
 var bodyParser = require("body-parser");
 var cors = require("cors");
 
+var basicauth = require("basic-auth");
 var bcrypt = require("bcrypt");
 var salt_rounds = 10;
 var uniqid = require("uniqid");
@@ -23,8 +24,17 @@ var users;
 creator(nano, 'users', {name : 'email', doc : users_design}, function(db){
   users = db;
 });
+var channels_design = {
+  'views' : {
+    'by_group_channel' : {
+      'map' : function(doc){
+        emit([doc.group, doc.channel], doc._id);
+      }
+    }
+  }
+}
 var channels;
-creator(nano, 'channels', function(db){
+creator(nano, 'channels', {name : 'channels', doc : channels_design}, function(db){
   channels = db;
 });
 var clients;
@@ -54,6 +64,34 @@ var perms_design = {
 creator(nano, 'perms', {name : 'perms', doc : perms_design}, function(db){
   perms = db;
 });
+var permissions_design = {
+  'views' : {
+    'by_user_action' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action], doc.value);
+      }
+    },
+    'by_user_action_scope' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action, doc.scope], doc.value);
+      }
+    },
+    'by_user' : {
+      'map' : function(doc){
+        emit(doc.user, doc._id);
+      }
+    },
+    'by_action_scope' : {
+      'map' : function(doc){
+        emit([doc.action, doc.scope], doc.value);
+      }
+    }
+  }
+};
+var permissions;
+creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
+  permissions = db;
+});
 
 var app = express();
 
@@ -62,18 +100,31 @@ app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
 
 var getAuth = function(req, res, next){
-  var authHeader = req.get('Authorization');
-  if(authHeader && authHeader.split(' ')[0] == 'Basic'){
+  console.log(req.get('Authorization'));
+  var user = basicauth(req);
+  if(user){
     req.auth = {};
-    var userpass = authHeader.split(' ')[1];
-    req.auth.username = userpass.split(':')[0];
-    req.auth.pass = userpass.split(':')[1];
+    req.auth.username = user.name;
+    req.auth.pass = user.pass;
     next();
   }else{
-    res.status(400).json({
+    res.status(401).json({
       message : "No auth header"
     });
   }
+  //
+  // var authHeader = req.get('Authorization');
+  // if(authHeader && authHeader.split(' ')[0] == 'Basic'){
+  //   req.auth = {};
+  //   var userpass = authHeader.split(' ')[1];
+  //   req.auth.username = userpass.split(':')[0];
+  //   req.auth.pass = userpass.split(':')[1];
+  //   next();
+  // }else{
+  //   res.status(400).json({
+  //     message : "No auth header"
+  //   });
+  // }
 }
 
 /**
@@ -290,17 +341,18 @@ app.post("/perms", function(req, res){
   }
 });
 
-app.post("/channel", function(req, res){
+app.post("/channel", getAuth, function(req, res){
   if(req.body.channel && req.body.group){
+    nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
     channels.insert({
       channel : req.body.channel,
       group : req.body.group,
       users : []
     }, function(err, body){
+      nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984";
       if(err){
         res.status(500).json({
-          message: "Database error",
-          err : err
+          message: err.message
         });
       }else{
         res.status(200).json({
@@ -313,6 +365,71 @@ app.post("/channel", function(req, res){
       message: "Missing parameter"
     });
   }
+});
+
+app.post("/channel/user",  getAuth, function(req, res){
+  nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
+  channels.view('channels', 'by_group_channel', {
+    key : [req.body.group, req.body.channel],
+    include_docs : true
+  }, function(chan_err, channel_docs){
+    if(chan_err){
+      res.status(500).json({
+        message : chan_err.message
+      });
+    }else{
+      console.log(channel_docs);
+      if(channel_docs.rows[0]){
+        users.get(req.body.user, function(user_err, user){
+          if(user_err){
+            res.status(500).json({
+              message : user_err.message
+            });
+          }else{
+            permissions.bulk({docs : [{
+              user : user._id,
+              action : 'send_message',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : "1"
+            },{
+              user : user._id,
+              action : 'view_channel',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : {group : req.body.group, channel : req.body.channel}
+            },{
+              user : user._id,
+              action : 'send_file',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : "1"
+            }]}, function(ins_err, body){
+              if(ins_err){
+                res.status(500).json({
+                  message : ins_err.message
+                });
+              }else{
+                var channel = channel_docs.rows[0].doc;
+                if(!channel.users.includes(user._id))
+                  channel.users.push(user._id);
+                channels.insert(channel, function(mod_err, mod_bod){
+                  if(mod_err){
+                    res.send(mod_err)
+                  }else{
+                    res.status(200).json({
+                      message : "Success"
+                    });
+                  }
+                });
+              }
+            });
+          }
+        });
+      }else{
+        res.status(404).json({
+          message : "Channel not found"
+        });
+      }
+    }
+  });
 });
 
 app.listen(process.env.ADMIN_PORT, function(err){

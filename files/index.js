@@ -40,81 +40,60 @@ app.get('/', function(req, res){
 
 app.options('/file', cors());
 app.post('/file', upload.single('file'), function(req, res){
-  var authHeader = req.get('Authorization');
-  if(authHeader){
-    if(authHeader.split(' ')[0] == 'Bearer'){
-      var token = authHeader.split(' ')[1];
-      if(token){
-        jwt.verify(token, secret, function(ver_err, decoded){
-          if(ver_err){
-            res.status(403).json({
-              message : "Invalid token"
-            });
-          }else{
-            if(req.file){
-              mClient.bucketExists(decoded.sub, function(exists_err){
-                if(exists_err){
-                  mClient.makeBucket(decoded.sub, 'ap-southeast-1', function(make_err){
-                    if(make_err){
-                      console.log(make_err);
-                      res.status(500).json({
-                        message : "Error storing file"
-                      });
-                    }else{
-                      var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length-1];
-                      mClient.putObject(decoded.sub, id, req.file.buffer, function(put_err, etag){
-                        if(put_err){
-                          console.log(put_err);
-                          res.status(500).json({
-                            message : "Error storing file"
-                          });
-                        }else{
-                          res.status(200).json({
-                            message : "Success",
-                            etag : etag
-                          });
-                        }
-                      });
-                    }
+  var user = req.get('User');
+  if(user){
+    if(req.file){
+      mClient.bucketExists(user, function(exists_err){
+        if(exists_err){
+          mClient.makeBucket(user, 'ap-southeast-1', function(make_err){
+            if(make_err){
+              console.log(make_err);
+              res.status(500).json({
+                message : "Error storing file"
+              });
+            }else{
+              var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length-1];
+              mClient.putObject(user, id, req.file.buffer, function(put_err, etag){
+                if(put_err){
+                  console.log(put_err);
+                  res.status(500).json({
+                    message : "Error storing file"
                   });
                 }else{
-                  var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length-1];
-                  mClient.putObject(decoded.sub, id, req.file.buffer, function(put_err, etag){
-                    if(put_err){
-                      console.log(put_err);
-                      res.status(500).json({
-                        message : "Error storing file"
-                      });
-                    }else{
-                      res.status(200).json({
-                        message : "Success",
-                        filename : id,
-                        originalname : req.file.originalname
-                      });
-                    }
+                  res.status(200).json({
+                    message : "Success",
+                    etag : etag
                   });
                 }
               });
+            }
+          });
+        }else{
+          var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length-1];
+          mClient.putObject(user, id, req.file.buffer, function(put_err, etag){
+            if(put_err){
+              console.log(put_err);
+              res.status(500).json({
+                message : "Error storing file"
+              });
             }else{
-              res.status(400).json({
-                message : "No file"
+              res.status(200).json({
+                message : "Success",
+                filename : id,
+                originalname : req.file.originalname
               });
             }
-          }
-        });
-      }else{
-        res.status(403).json({
-          message : "No token"
-        });
-      }
+          });
+        }
+      });
     }else{
-      res.status(403).json({
-        message : "Invalid auth method"
+      res.status(400).json({
+        message : "No file"
       });
     }
   }else{
-    res.status(403).json({
-      message : "No auth header"
+    res.status(404).json({
+      message : 'No user found'
     });
   }
 });

@@ -19,7 +19,7 @@ var messages_design = {
   'views' : {
     'by_channel' : {
       'map' : function(doc){
-        emit(doc.channel, doc._id);
+        emit([doc.channel.group, doc.channel.channel], doc._id);
       }
     }
   }
@@ -105,7 +105,8 @@ module.exports.run = function (worker) {
       //Add metadata
       req.data.datetime = datetime;
       req.data.user = authToken.username;
-      req.data.channel = req.channel;
+      var gc = req.channel.split('+');
+      req.data.channel = {group : gc[0], channel : gc[1]};
       //Log message
       messages.insert(req.data, datetime.getTime() + "&" + req.data.user, function(err, message){
         err ? next(err) : next();

@@ -35,9 +35,6 @@ const mutations = {
   [types.LOGIN_SUCCESS](state, token){
     state.token = token;
   },
-  [types.LOGIN_FAILURE](state, message){
-    state.err_message = message;
-  },
   [types.LOGOUT](state){
     state.token = "";
   }

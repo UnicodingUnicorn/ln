@@ -3,14 +3,15 @@ import Resource from 'vue-resource';
 
 import toastr from 'toastr';
 
+import auth from './auth';
 import options from '../options';
 
 Vue.use(Resource);
 
 export default{
   get_messages(gc, token, cb){
-    Vue.http.get(options.MESSAGES_URL + '/messages/' + gc.group + '+' + gc.channel + '/' + options.HISTORY_COUNT, {
-      headers : {'Authorization' : 'Bearer ' + token},
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + JSON.stringify(gc) + '/' + options.HISTORY_COUNT), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
       function(res){
@@ -20,8 +21,8 @@ export default{
     });
   },
   get_messages_offset(gc, offset, token, cb){
-    Vue.http.get(options.MESSAGES_URL + '/messages/' + gc.group + '+' + gc.channel + '/' + offset + '/' + options.HISTORY_COUNT, {
-      headers : {'Authorization' : 'Bearer ' + token},
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + JSON.stringify(gc) + '/' + offset + '/' + options.HISTORY_COUNT), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
       function(res){
@@ -31,8 +32,8 @@ export default{
     });
   },
   send_file(data, token, cb){
-    Vue.http.post(options.FILES_URL + '/file', data, {
-      headers : {'Authorization' : 'Bearer ' + token}
+    Vue.http.post(auth.withAuth(token, options.FILES_URL + '/file'), data, {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
     }).then(
       function(res){
         cb(res);
