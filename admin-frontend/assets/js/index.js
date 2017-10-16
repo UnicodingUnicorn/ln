@@ -170,11 +170,12 @@ var app = new Vue({
       if(userid){
         this.$http.get(ACCOUNTS_URL + '/user/' + userid).then(
           function(res){
-            this.query_name = res.body.name;
-            this.query_email = res.body.email;
-            this.query_dob = res.body.dob;
-            $('#query_dob').pickadate('picker').set('select', res.body.dob, { format: 'yyyy-mm-dd' });
-            this.query_gender = res.body.gender;
+            var user = res.body.user;
+            this.query_name = user.name;
+            this.query_email = user.email;
+            this.query_dob = user.dob;
+            $('#query_dob').pickadate('picker').set('select', user.dob, { format: 'yyyy-mm-dd' });
+            this.query_gender = user.gender;
           }, function(res){
             this.new_err(res.body.message);
         }).bind(this);
@@ -190,7 +191,7 @@ var app = new Vue({
         dob : this.query_dob,
         gender : this.query_gender,
       };
-      this.$http.post(ACCOUNTS_URL + '/user/' + $('#queryuserid').val(), user_data, {
+      this.$http.post(ADMIN_URL + '/user/' + $('#queryuserid').val(), user_data, {
         headers : {
           Authorization : 'Basic ' + btoa(this.user_id + ':' + this.password)
         },

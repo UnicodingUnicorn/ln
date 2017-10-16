@@ -229,6 +229,51 @@ app.post("/user", getAuth, function(req, res){
   }
 });
 
+app.options("/user/:id", cors());
+app.post("/user/:id", getAuth, function(req, res){
+  users.get(req.params.id, function(get_err, user){
+    if(get_err){
+      res.status(500).json({
+        message : get_err.message
+      });
+    }else{
+      var user_data = {
+        dob : req.body.dob,
+        name : req.body.name,
+        email : req.body.email,
+        gender : req.body.gender
+      };
+      if(!user_data.dob)
+        user_data.dob = user.dob;
+      if(!user_data.name)
+        user_data.name = user.name;
+      if(!user_data.email)
+        user_data.email = user.email;
+      if(!user_data.gender)
+        user_data.gender = user.gender;
+      if(req.body.password){
+        user_data.password = bcrypt.hashSync(req.body.password, 10);
+      }else{
+        user_data.password = user.password;
+      }
+      user_data._rev = user._rev;
+      nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
+      users.insert(user_data, req.params.id, function(ins_err, body){
+        nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984"
+        if(ins_err){
+          res.status(500).json({
+            message : ins_err.message
+          });
+        }else{
+          res.status(200).json({
+            message : "Success!"
+          });
+        }
+      });
+    }
+  });
+});
+
 /**
  * @api {delete} /user/:id Delete a user
  * @apiName Delete user

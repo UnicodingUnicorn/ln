@@ -14,7 +14,7 @@ export default{
       responseType : 'json'
     }).then(
       function(res){
-        cb(res.body);
+        cb(res.body.user);
       }, function(res){
         toastr.error(res.body.message);
     });
