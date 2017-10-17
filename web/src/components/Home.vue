@@ -11,9 +11,7 @@
     <ul v-show="token != undefined" id="slide-out" class="side-nav fixed">
       <li>
         <div class="user-view">
-          <div class="background cyan">
-            <!-- <img src="http://via.placeholder.com/1000x750"> -->
-          </div>
+          <div class="background cyan"></div>
           <a><span class="white-text name">{{user_info.username}}</span></a>
           <a><span class="white-text email">{{user_info.name}}</span></a>
         </div>
@@ -40,7 +38,8 @@
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
-            <a href='#'><span class="title">{{users[m2.user].username}}</span></a>
+            <a v-if="user_info.sub != m2.user" href='#'><span class="title">{{users[m2.user].username}}</span></a>
+            <span  v-else class="title">{{users[m2.user].username}}</span>
             <p v-for="m3 in m2.messages">
               <span v-if="m2.type == 'm'">{{m3}}</span>
               <span v-else-if="m2.type == 'f'">

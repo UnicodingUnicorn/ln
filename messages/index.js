@@ -24,29 +24,7 @@ var messages_design = {
 creator(nano, 'messages', {name : 'messages', doc : messages_design}, function(db){
   messages = db;
 });
-var perms;
-var perms_design = {
-  'views' : {
-    'by_perm' : {
-      'map' : function(doc){
-        emit([doc.user, doc.channel], doc.role);
-      }
-    },
-    'by_user' : {
-      'map' : function(doc){
-        emit(doc.user, doc.channel);
-      }
-    },
-    'by_channel' : {
-      'map' : function(doc){
-        emit(doc.channel, doc.user);
-      }
-    }
-  }
-};
-creator(nano, 'perms', {name : 'perms', doc : perms_design}, function(db){
-  perms = db;
-});
+
 var permissions_design = {
   'views' : {
     'by_user_action' : {

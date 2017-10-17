@@ -28,28 +28,33 @@ creator(nano, 'messages', {name : 'messages', doc : messages_design}, function(d
   messages = db;
 });
 
-var perms;
-var perms_design = {
+var permissions_design = {
   'views' : {
-    'by_perm' : {
+    'by_user_action' : {
       'map' : function(doc){
-        emit([doc.user, doc.channel], doc.role);
+        emit([doc.user, doc.action], doc.value);
+      }
+    },
+    'by_user_action_scope' : {
+      'map' : function(doc){
+        emit([doc.user, doc.action, doc.scope], doc.value);
       }
     },
     'by_user' : {
       'map' : function(doc){
-        emit(doc.user, doc.channel);
+        emit(doc.user, doc._id);
       }
     },
-    'by_channel' : {
+    'by_action_scope' : {
       'map' : function(doc){
-        emit(doc.channel, doc.user);
+        emit([doc.action, doc.scope], doc.value);
       }
     }
   }
 };
-creator(nano, 'perms', {name : 'perms', doc : perms_design}, function(db){
-  perms = db;
+var permissions;
+creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
+  permissions = db;
 });
 
 module.exports.run = function (worker) {
@@ -79,19 +84,7 @@ module.exports.run = function (worker) {
   scServer.addMiddleware(scServer.MIDDLEWARE_PUBLISH_IN, function(req, next){
     var authToken = req.socket.authToken;
     if(authToken){
-      async.each(authToken.channels, function(channel, cb){
-        if(req.channel == channel.channel){
-          if(channel.role == 'w' || channel.role == 'a'){ //Admins can also send
-            cb("found")
-          }else{
-            cb("Unauthorised to send messages")
-          }
-        }else{
-          cb();
-        }
-      }, function(err){
-        err ? err == 'found' ? next() : next(err) : next("Unrecognised channel");
-      });
+      authToken.channels.includes(req.channel) ? next() : next("Unrecognised channel");
     }else{
       next("Invalid auth token");
     }
@@ -123,16 +116,16 @@ module.exports.run = function (worker) {
         if(auth_err){
           respond("Invalid token");
         }else{
-          perms.view("perms", "by_user", {
-            key : decoded.sub,
+          permissions.view('permissions', 'by_user_action', {
+            key : [decoded.sub, 'send_message'],
             include_docs : true
-          }, function(err, role){
-            if(err){
+          }, function(view_err, roles){
+            if(view_err){
               err.statusCode == 404 ? respond("User not found") : respond("Error");
             }else{
               var channels = [];
-              async.each(role.rows, function(row, cb){
-                channels.push({channel : row.doc.channel, role : row.doc.role});
+              async.each(roles.rows, function(row, cb){
+                channels.push(row.doc.scope.group + '+' + row.doc.scope.channel);
                 cb();
               }, function(err){
                 if(channels.length > 0){
