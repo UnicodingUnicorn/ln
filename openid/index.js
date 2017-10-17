@@ -341,7 +341,9 @@ app.post("/token", function(req, res){
   });
 });
 
+app.options('/userinfo', cors());
 app.get("/userinfo", function(req, res){
+  console.log(req.get('Authorization'));
   bearerToken(req, function(tok_err, token){
     if(tok_err){
       res.status(401).json({
@@ -349,6 +351,7 @@ app.get("/userinfo", function(req, res){
         error_description : "Invalid Bearer Auth"
       });
     }else{
+      console.log(token);
       memcached.get('id:' + token, function(m_err, id_token){
         if(m_err){
           res.status(401).json({
@@ -372,6 +375,7 @@ app.get("/userinfo", function(req, res){
                   for(var i = 0; i < scopes.length; i++){
                     if(scopes[i] == "profile"){
                       return_data.name = user.name;
+                      return_data.username = user.username;
                       return_data.gender = user.gender;
                       return_data.birthdate = user.dob;
                     }else if(scopes[i] == "email"){

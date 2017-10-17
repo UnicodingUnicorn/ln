@@ -9,6 +9,15 @@
       </div>
     </nav>
     <ul v-show="token != undefined" id="slide-out" class="side-nav fixed">
+      <li>
+        <div class="user-view">
+          <div class="background cyan">
+            <!-- <img src="http://via.placeholder.com/1000x750"> -->
+          </div>
+          <a><span class="white-text name">{{user_info.username}}</span></a>
+          <a><span class="white-text email">{{user_info.name}}</span></a>
+        </div>
+      </li>
       <div v-for="gc in channels">
         <li><a class="subheader">{{gc.group}}</a></li>
         <li v-for="channel in gc.channels">
@@ -31,7 +40,7 @@
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
-            <span class="title">{{users[m2.user].username}}</span>
+            <a href='#'><span class="title">{{users[m2.user].username}}</span></a>
             <p v-for="m3 in m2.messages">
               <span v-if="m2.type == 'm'">{{m3}}</span>
               <span v-else-if="m2.type == 'f'">
@@ -115,7 +124,8 @@
         token : 'user_token',
         channels : 'channels',
         messages : 'messages',
-        users : 'users'
+        users : 'users',
+        user_info : 'user_info'
       })
     },
     watch : {
@@ -220,6 +230,7 @@
           if(Cookies.get('nonce') == this.$route.query.nonce){
             Cookies.remove('nonce');
             this.$store.dispatch('login', this.$route.query);
+            this.$store.dispatch('get_userinfo', this.$route.query)
             this.$router.push('/');
           }else{
             toastr.error("Improper nonce, you may be under attack.");

@@ -2,6 +2,8 @@ export const LOGIN = 'LOGIN'
 export const LOGIN_SUCCESS = 'LOGIN_SUCCESS'
 export const LOGOUT = 'LOGOUT'
 
+export const UPDATE_USERINFO = 'UPDATE_USERINFO'
+
 export const REFRESH_CHANNELS = 'REFRESH_CHANNELS'
 
 export const ADD_MESSAGE = 'ADD_MESSAGE'

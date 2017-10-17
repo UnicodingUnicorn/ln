@@ -22,7 +22,7 @@ Frontend improvements:
 ☐ Active renewal of token while online
 ☐ Notifications
 ✔ Replace foreach with async operations in messages module @done(2017-09-24 22:30)
-☐ User display in sidenav
+✔ User display in sidenav @done(2017-10-17 14:20)
 ✔ favicon @done(2017-10-05 22:50)
 ☐ favicon badges
 ☐ Indication you are at top
@@ -35,8 +35,10 @@ Housekeeping:
 ✔ Git repo @done(2017-10-09 16:32)
 ☐ Options files for services
 ☐ Write DDL and bash run script to copy over pre docker-compose
+Permissions:
 ✔ Redo permissions system @done(2017-10-16 22:14)
 ☐ Secure user header
+☐ Implement cache with redis
 File uploads:
 ✔ Set up minio in docker-compose @done(2017-09-25 12:00)
 ✔ Create API endpoint for file upload @done(2017-09-28 00:06)
