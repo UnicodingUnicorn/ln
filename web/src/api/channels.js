@@ -19,5 +19,16 @@ export default{
         toastr.error(res.body.message);
       }
     );
+  },
+  getPMS(token, cb){
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms'), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
+    }).then(
+      res => {
+        cb(res.body);
+      }, res => {
+        toastr.error(res.body.message);
+      }
+    );
   }
 }

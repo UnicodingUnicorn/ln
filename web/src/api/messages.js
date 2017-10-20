@@ -31,6 +31,28 @@ export default{
         toastr.error(res.body.message);
     });
   },
+  get_pms(user, token, cb){
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '/' + options.HISTORY_COUNT), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+      responseType : 'json'
+    }).then(
+      function(res){
+        cb(res.body);
+      }, function(res){
+        toastr.error(res.body.message);
+    });
+  },
+  get_pms_offset(user, offset, token, cb){
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '/' + offset + '/' + options.HISTORY_COUNT), {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+      responseType : 'json'
+    }).then(
+      function(res){
+        cb(res.body);
+      }, function(res){
+        toastr.error(res.body.message);
+    });
+  },
   send_file(data, token, cb){
     Vue.http.post(auth.withAuth(token, options.FILES_URL + '/file'), data, {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}

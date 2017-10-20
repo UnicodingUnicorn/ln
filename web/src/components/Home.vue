@@ -2,9 +2,14 @@
   <div>
     <nav v-show="token != undefined">
       <div class="nav-wrapper cyan chat">
-        <a href="#" data-activates="slide-out" class="button-collapse brand-logo left"><i class="material-icons">menu</i> {{group}}: {{channel}}</a>
+        <a href="#" data-activates="slide-out" class="button-collapse brand-logo left">
+          <i class="material-icons">menu</i>
+          <span v-show="group != 'pm'">{{group}}: {{channel}}</span>
+          <span v-show="group == 'pm'">{{channel}}</span>
+        </a>
         <ul class="left hide-on-med-and-down">
-          <li><a>{{group}} : {{channel}}</a></li>
+          <li v-show="group != 'pm'"><a>{{group}} : {{channel}}</a></li>
+          <li v-show="group == 'pm'"><a>{{channel}}</a></li>
         </ul>
       </div>
     </nav>
@@ -16,10 +21,16 @@
           <a><span class="white-text email">{{user_info.name}}</span></a>
         </div>
       </li>
-      <div v-for="gc in channels">
+      <div v-for="gc in channels" v-if="gc.group != 'pm'">
         <li><a class="subheader">{{gc.group}}</a></li>
         <li v-for="channel in gc.channels">
           <a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a>
+        </li>
+      </div>
+      <div v-if="pms.length > 0">
+        <li><a class="subheader">Direct Messages</a></li>
+        <li v-for="channel in pms">
+          <a class="waves-effect" v-on:click="changeGC('pm', channel)">{{channel}}</a>
         </li>
       </div>
       <li><div class="divider"></div></li>
@@ -38,8 +49,8 @@
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
-            <a v-if="user_info.sub != m2.user" href='#'><span class="title">{{users[m2.user].username}}</span></a>
-            <span  v-else class="title">{{users[m2.user].username}}</span>
+            <a v-if="user_info.sub != m2.user" v-on:click="open_pm" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
+            <span v-else class="title"><b>{{users[m2.user].username}}</b></span>
             <p v-for="m3 in m2.messages">
               <span v-if="m2.type == 'm'">{{m3}}</span>
               <span v-else-if="m2.type == 'f'">
@@ -89,9 +100,6 @@
   import socketCluster from 'socketcluster-client'
   import toastr from 'toastr'
 
-  import Chat from "./Chat.vue"
-  import Channels from "./Channels.vue"
-
   import options from "../options"
   import messagesAPI from "../api/messages"
 
@@ -106,14 +114,11 @@
   };
 
   export default {
-    components : {
-      Chat,
-      Channels
-    },
     data : function(){
       return {
         group : '',
         channel : '',
+        message : '',
         current_messages : [],
         redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/')
       }
@@ -123,6 +128,7 @@
         token : 'user_token',
         channels : 'channels',
         messages : 'messages',
+        pms : 'pms',
         users : 'users',
         user_info : 'user_info'
       })
@@ -137,6 +143,10 @@
         this.group = group;
         this.channel = channel;
         Cookies.set('gc', {group : this.group, channel : this.channel});
+        setTimeout(function(){
+          $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+          $('#chatView').scrollTop = $('#chatView').scrollHeight;
+        }, 10);
       },
       logout : function(event){
         this.channels.forEach(function(gc){
@@ -152,18 +162,64 @@
       render_time : messagesAPI.render_time,
       send : function(event){
         if(this.message != ""){
-          socket.publish(this.group + '+' + this.channel, {message : this.message, type : 'm'}, function(err){
-            err ? toastr.error(err) : this.message = "";
-          }.bind(this));
+          if(this.group == 'pm'){
+            this.$store.dispatch('add_message', {
+              message : {
+                message : this.message,
+                type : 'm',
+                datetime : new Date(),
+                user : this.user_info.sub
+              },
+              gc : this.group + '+' + this.channel
+            }).then(function(){
+              $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+              $('#chatView').scrollTop = $('#chatView').scrollHeight;
+            });
+            socket.emit('pm', {
+              sender : this.user_info.sub,
+              recipient : this.channel,
+              message : this.message,
+              type : 'm'
+            }, function(err){
+              err ? toastr.error(err) : this.message = "";
+            }.bind(this));
+          }else{
+            socket.publish(this.group + '+' + this.channel, {message : this.message, type : 'm'}, function(err){
+              err ? toastr.error(err) : this.message = "";
+            }.bind(this));
+          }
         }
       },
       uploadfile : function(event){
         var formData = new FormData();
         formData.append('file', $('#file_upload')[0].files[0]);
         messagesAPI.send_file(formData, this.token, function(res){
-          socket.publish(this.group + '+' + this.channel, {message : {filename : res.body.filename, originalname : res.body.originalname}, type : 'f'}, function(err){
-            err ? toastr.error(err) : this.message = "";
-          }.bind(this));
+          if(this.group == 'pm'){
+            this.$store.dispatch('add_message', {
+              message : {
+                message : {filename : res.body.filename, originalname : res.body.originalname},
+                type : 'f',
+                datetime : new Date(),
+                user : this.user_info.sub
+              },
+              gc : this.group + '+' + this.channel
+            }).then(function(){
+              $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+              $('#chatView').scrollTop = $('#chatView').scrollHeight;
+            });
+            socket.emit('pm', {
+              sender : this.user_info.sub,
+              recipient : this.channel,
+              message : {filename : res.body.filename, originalname : res.body.originalname},
+              type : 'f'
+            }, function(err){
+              err ? toastr.error(err) : this.message = "";
+            }.bind(this));
+          }else{
+            socket.publish(this.group + '+' + this.channel, {message : {filename : res.body.filename, originalname : res.body.originalname}, type : 'f'}, function(err){
+              err ? toastr.error(err) : this.message = "";
+            }.bind(this));
+          }
         }.bind(this));
       },
       init_channels : function(){
@@ -185,7 +241,7 @@
           this.channels.forEach(function(gc){
             gc.channels.forEach(function(channel){
               socket.subscribe(gc.group + '+' + channel, {waitForAuth : true}).watch(function(data){
-                this.$store.dispatch('add_message', {message : data, gc : this.group + '+' + this.channel}).then(function(){
+                this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(function(){
                   $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
                   $('#chatView').scrollTop = $('#chatView').scrollHeight;
                 });
@@ -193,18 +249,40 @@
             }.bind(this));
           }.bind(this));
         }.bind(this));
+        this.$store.dispatch('refresh_pms', this.token).then(function(){
+          this.$store.dispatch('init_pms', {channels : this.pms, token : this.token}).then(function(){
+            $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+            $('#chatView').scrollTop = $('#chatView').scrollHeight;
+          });
+        }.bind(this));
+        socket.subscribe('pm:' + this.user_info.sub, {waitForAuth : true}).watch(function(data){
+          if(!this.pms.includes(data.user)){
+            console.log('foo');
+            this.$store.dispatch('add_pm_channel', data.user);
+          }
+          this.$store.dispatch('add_message', {message : data, gc : 'pm' + '+' + data.user}).then(function(){
+            $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+            $('#chatView').scrollTop = $('#chatView').scrollHeight;
+          }.bind(this));
+        }.bind(this));
       },
       chat_scroll : function(event){
         if($('#chatView').scrollTop() == 0){
           console.log(this.at_max());
-          this.$store.dispatch('load_messages', {gc : {group : this.group, channel : this.channel}, token : this.token});
+          if(this.group == 'pm'){
+            this.$store.dispatch('load_pms', {user : this.channel, token : this.token});
+          }else{
+            this.$store.dispatch('load_messages', {gc : {group : this.group, channel : this.channel}, token : this.token});
+          }
         }
       },
       file_url : function(user, filename){
         return options.FILES_URL + '/file/' + user + '/' + filename;
       },
       at_max : function(){
-        return this.current_messages.length / options.HISTORY_COUNT;
+        if(this.current_messages)
+          return this.current_messages.length / options.HISTORY_COUNT;
+        return false;
       },
       is_image : function(filename){
         var fileformat = filename.split('.')[filename.split('.').length - 1];
@@ -214,6 +292,13 @@
         $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
         $('#chatView').scrollTop = $('#chatView').scrollHeight;
         $('.materialboxed').materialbox();
+      },
+      open_pm : function(event){
+        this.changeGC('pm', event.target.id);
+        this.$store.dispatch('add_pm_channel', event.target.id);
+      },
+      render_pm_user : function(users){
+        return users.replace(this.user_info.sub, '');
       }
     },
     mounted : function(){
@@ -280,9 +365,8 @@
     max-height: 75vh;
   }
   .entry{
-    /*position : fixed;*/
+    position : fixed;
     bottom : 0;
     width : 100%;
-    /*background-color: #FFFFFF;*/
   }
 </style>

@@ -54,6 +54,34 @@ const actions = {
         resolve();
       }
     });
+  },
+  init_pms({commit, state}, data){
+    return new Promise((resolve, reject) => {
+      async.each(data.channels, function(user, cb){
+        messages.get_pms(user, data.token, function(res){
+          res.messages.forEach(function(message){
+            commit(types.ADD_MESSAGE, {message : message, gc : 'pm' + '+' + user});
+          });
+          cb();
+        });
+      }, function(err){
+        resolve();
+      });
+    });
+  },
+  load_pms({commit, state}, data){
+    return new Promise((resolve, reject) => {
+      var message_length = state.num_messages['pm' + '+' + data.user];
+      if(message_length >= options.HISTORY_COUNT){
+        messages.get_pms_offset(data.user, message_length, data.token, function(res){
+          for(var i = res.messages.length - 1; i >= 0; i--)
+            commit(types.PREPEND_MESSAGE, {message : res.messages[i], gc : 'pm' + '+' + data.user});
+          resolve();
+        });
+      }else{
+        resolve();
+      }
+    });
   }
 }
 

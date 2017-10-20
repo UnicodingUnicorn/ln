@@ -53,6 +53,44 @@ var permissions;
 creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
   permissions = db;
 });
+var pms;
+var pms_design = {
+  'views' : {
+    'by_user' : {
+      'map' : function(doc){
+        emit(doc.users.split('+')[0], doc.users.split('+')[1]);
+        emit(doc.users.split('+')[1], doc.users.split('+')[0]);
+      }
+    },
+    'by_users' : {
+      'map' : function(doc){
+        emit(doc.users, null);
+      }
+    }
+  },
+  'lists' : {
+    'by_user' : function(head, req){
+      var row;
+      var users = [];
+      while(row = getRow()){
+        var is_in = false;
+        for(var user in users){
+          if(user == row.value){
+            is_in = true;
+            break;
+          }
+        }
+        if(!is_in){
+          users.push(row.value);
+        }
+      }
+      send(JSON.stringify(users));
+    }
+  }
+};
+creator(nano, 'pms', {name : 'pms', doc : pms_design}, function(db){
+  pms = db;
+});
 
 var app = express();
 app.use(bodyParser.json());
@@ -61,34 +99,6 @@ app.use(bodyParser.urlencoded({ extended : true}));
 app.use(cors({
   "preflightContinue": false
 }));
-
-var getAuth = function(req, res, next){
-  var token = req.get("Authorization");
-  if(token.split(' ')[0] == 'Bearer'){
-    if(token.split(' ')[1])
-      token = token.split(' ')[1];
-    if(token){
-      jwt.verify(token, secret, function(err, decoded){
-        if(err){
-          res.status(400).json({
-            message : "Invalid token"
-          });
-        }else{
-          req.decoded = decoded;
-          next();
-        }
-      });
-    }else{
-      res.status(400).json({
-        message : "No token"
-      });
-    }
-  }else{
-    res.status(400).json({
-      message : "Invalid auth type"
-    });
-  }
-};
 
 app.get("/", function(req, res){
   res.status(200).json({
@@ -109,27 +119,22 @@ app.get("/messages/:channel/:count", function(req, res){
         messages.view("messages", "by_channel", {
           key : [gc.group, gc.channel],
           include_docs : true,
-          limit : req.params.count
+          limit : req.params.count,
+          descending : true
         }, function(err, body){
           if(err){
             res.status(200).json({});
           }else{
             var messages_data = [];
-            async.each(body.rows, function(message, cb){
+            body.rows.forEach(function(message){
               messages_data.push({
                 user : message.doc.user,
                 datetime : message.doc.datetime,
                 message : message.doc.message,
                 type : message.doc.type
               });
-              cb();
-            }, function(iter_err){
-              if(iter_err){
-                res.status(200).json({});
-              }else{
-                res.status(200).json(messages_data);
-              }
             });
+            res.status(200).json(messages_data.reverse());
           }
         });
       }else{
@@ -159,27 +164,22 @@ app.get("/messages/:channel/:offset/:count", function(req, res){
           key : [gc.group, gc.channel],
           include_docs : true,
           limit : req.params.count,
-          skip : req.params.offset
+          skip : req.params.offset,
+          descending : true
         }, function(err, body){
           if(err){
             res.status(200).json({});
           }else{
             var messages_data = [];
-            async.each(body.rows, function(message, cb){
+            body.rows.forEach(function(message){
               messages_data.push({
                 user : message.doc.user,
                 datetime : message.doc.datetime,
                 message : message.doc.message,
                 type : message.doc.type
               });
-              cb();
-            }, function(iter_err){
-              if(iter_err){
-                res.status(200).json({});
-              }else{
-                res.status(200).json(messages_data);
-              }
             });
+            res.status(200).json(messages_data.reverse());
           }
         });
       }else{
@@ -193,53 +193,6 @@ app.get("/messages/:channel/:offset/:count", function(req, res){
       message : 'No user found'
     });
   }
-
-
-  // perms.view("perms", "by_perm", {
-  //   key : [req.decoded.sub, req.params.channel],
-  //   include_docs : true
-  // }, function(perm_err, role){
-  //   if(perm_err){
-  //     res.status(400).json({
-  //       messages : "No permissions"
-  //     });
-  //   }else{
-  //     if(role.rows[0].value.match(/[rwa]/)){
-  //       messages.view("messages", "by_channel", {
-  //         key : req.params.channel,
-  //         include_docs : true,
-  //         limit : req.params.count,
-  //         skip : req.params.offset,
-  //         descending : true
-  //       }, function(err, body){
-  //         if(err){
-  //           res.status(200).json({});
-  //         }else{
-  //           var messages_data = [];
-  //           async.each(body.rows, function(message, cb){
-  //             messages_data.push({
-  //               user : message.doc.user,
-  //               datetime : message.doc.datetime,
-  //               message : message.doc.message,
-  //               type : message.doc.type
-  //             });
-  //             cb();
-  //           }, function(iter_err){
-  //             if(iter_err){
-  //               res.status(200).json({});
-  //             }else{
-  //               res.status(200).json(messages_data.reverse());
-  //             }
-  //           });
-  //         }
-  //       });
-  //     }else{
-  //       res.status(400).json({
-  //         messages : "No permissions"
-  //       });
-  //     }
-  //   }
-  // });
 });
 
 app.get("/channels", function(req, res){
@@ -254,6 +207,104 @@ app.get("/channels", function(req, res){
       }, function(err){
         res.status(200).json(return_channels);
       });
+    });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
+});
+
+app.get('/pms', function(req, res){
+  if(req.get('User')){
+    pms.viewWithList("pms", "by_user", "by_user", {
+      key : req.get('User')
+    }, function(view_err, body){
+      res.status(200).json({
+        message : 'Success',
+        pms : body
+      });
+    });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
+});
+
+app.get("/pms/:user/:count", function(req, res){
+  if(req.get('User')){
+    var key = req.get('User') < req.params.user ? req.get('User') + '+' + req.params.user : req.params.user + '+' + req.get('User');
+    pms.view("pms", "by_users", {
+      key : key,
+      limit : req.params.count,
+      include_docs : true,
+      descending : true
+    }, function(view_err, rows){
+      if(view_err){
+        if(view_err.statusCode == 404){
+          res.status(200).json({
+            message : "Success",
+            messages : []
+          });
+        }
+      }else{
+        var return_pms = [];
+        rows.rows.forEach(function(row){
+          return_pms.push({
+            user : row.doc.user,
+            users : row.doc.users,
+            datetime : row.doc.datetime,
+            message : row.doc.message,
+            type : row.doc.type
+          });
+        });
+        res.status(200).json({
+          message : "Success",
+          messages : return_pms.reverse()
+        });
+      }
+    });
+  }else{
+    res.status(404).json({
+      message : 'No user found'
+    });
+  }
+});
+
+app.get("/pms/:user/:offset/:count", function(req, res){
+  if(req.get('User')){
+    var key = req.get('User') < req.params.user ? req.get('User') + '+' + req.params.user : req.params.user + '+' + req.get('User');
+    pms.view("pms", "by_users", {
+      key : key,
+      limit : req.params.count,
+      skip : req.params.offset,
+      include_docs : true,
+      descending : true
+    }, function(view_err, rows){
+      if(view_err){
+        if(view_err.statusCode == 404){
+          res.status(200).json({
+            message : "Success",
+            messages : []
+          });
+        }
+      }else{
+        var return_pms = [];
+        rows.rows.forEach(function(row){
+          return_pms.push({
+            user : row.doc.user,
+            users : row.doc.users,
+            datetime : row.doc.datetime,
+            message : row.doc.message,
+            type : row.doc.type
+          });
+        });
+        res.status(200).json({
+          message : "Success",
+          messages : return_pms.reverse()
+        });
+      }
     });
   }else{
     res.status(404).json({
