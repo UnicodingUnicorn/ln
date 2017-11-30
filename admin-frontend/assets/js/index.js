@@ -168,7 +168,7 @@ var app = new Vue({
     queryuser : function(event){
       var userid = $('#queryuserid').val();
       if(userid){
-        this.$http.get(ACCOUNTS_URL + '/user/' + userid).then(
+        this.$http.get(ADMIN_URL + '/user/' + userid).then(
           function(res){
             var user = res.body.user;
             this.query_name = user.name;

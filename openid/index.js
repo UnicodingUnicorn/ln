@@ -43,8 +43,8 @@ var iss = process.env.ISS;
 //TODO: SSL
 var app = express();
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended : true}));
+// app.use(bodyParser.json());
+// app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
 
 app.use(express.static(__dirname + "/assets"));
@@ -56,7 +56,7 @@ app.get("/", function(req, res){
   res.status(200).send("Received at OpenID service");
 });
 
-app.all('/authorise', function(req, res){
+app.all('/authorise', bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   if(req.method == "GET" || req.method == "POST"){
     var params;
     req.method == "GET" ? params = req.query : params = req.body;
@@ -144,7 +144,7 @@ app.all('/authorise', function(req, res){
   }
 });
 
-app.post("/authcode", function(req, res){
+app.post("/authcode", bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   //TODO:Implement rate limiting
   res.data = {
     redirect_uri : req.body.redirect_uri,
@@ -193,7 +193,7 @@ app.post("/authcode", function(req, res){
   });
 });
 
-app.post("/implicit", function(req, res){
+app.post("/implicit", bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   //TODO:Implement rate limiting
   res.data = {
     redirect_uri : req.body.redirect_uri,
@@ -260,7 +260,7 @@ app.post("/implicit", function(req, res){
   });
 });
 
-app.post("/token", function(req, res){
+app.post("/token", bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   var auth = basicauth(req);
   clients.get(auth.name, function(cerr, client){
     if(cerr && cerr.statusCode == 404){
@@ -342,8 +342,7 @@ app.post("/token", function(req, res){
 });
 
 app.options('/userinfo', cors());
-app.get("/userinfo", function(req, res){
-  console.log(req.get('Authorization'));
+app.get("/userinfo", bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   bearerToken(req, function(tok_err, token){
     if(tok_err){
       res.status(401).json({
@@ -351,7 +350,6 @@ app.get("/userinfo", function(req, res){
         error_description : "Invalid Bearer Auth"
       });
     }else{
-      console.log(token);
       memcached.get('id:' + token, function(m_err, id_token){
         if(m_err){
           res.status(401).json({
@@ -408,7 +406,7 @@ app.all('/verify/:token/:target_url', function(req, res){
                 res.status(403).send("Forbidden");
               }else{
                 req.headers['User'] = decoded.sub;
-                req.pipe(request(req.params.target_url).on('error', function(err){
+                req.pipe(request[req.method.toLowerCase()](req.params.target_url).on('error', function(err){
                   res.status(404).send("Not found");
                 })).pipe(res);
               }

@@ -25,6 +25,7 @@ const actions = {
   },
   init_messages({commit, state}, data){
     return new Promise((resolve, reject) => {
+      commit(types.CLEAR_MESSAGES);
       async.each(data.channels, function(gc, cb){
         async.each(gc.channels, function(channel, cb2){
           messages.get_messages({group : gc.group, channel : channel}, data.token, function(m){
@@ -207,6 +208,9 @@ const mutations = {
         }]
       }]);
     }
+  },
+  [types.CLEAR_MESSAGES](state){
+    state.messages = {};
   }
 }
 

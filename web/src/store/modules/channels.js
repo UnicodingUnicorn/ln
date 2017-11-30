@@ -20,9 +20,10 @@ const getters = {
 const actions = {
   refresh_channels({commit, state}, token){
     return new Promise((resolve, reject) => {
-      channel_api.getChannels(token, function(ch){
+      commit(types.CLEAR_CHANNELS);
+      channel_api.getChannels(token, (ch) => {
         var raw_channels = [];
-        async.eachSeries(ch, function(channel, cb){
+        async.eachSeries(ch, (channel, cb) => {
           raw_channels[channel.group] ? raw_channels[channel.group].push(channel.channel) : raw_channels[channel.group] = [channel.channel];
           user_api.get_users(channel, token, function(users){
             Object.keys(users).forEach(function(user_id){
@@ -30,7 +31,7 @@ const actions = {
             });
             cb();
           });
-        }, function(){
+        }, () => {
           var channels = [];
           for(var group in raw_channels){
             channels.push({
@@ -41,6 +42,16 @@ const actions = {
           commit(types.REFRESH_CHANNELS, channels);
           resolve();
         });
+      });
+    });
+  },
+  refresh_channel_users({commit, state}, {gc, token}){
+    return new Promise((resolve) => {
+      user_api.get_users(gc, token, (users) => {
+        Object.keys(users).forEach((user_id) => {
+          commit(types.ADD_USER, {id : user_id, user : users[user_id]});
+        });
+        resolve();
       });
     });
   },
@@ -70,7 +81,6 @@ const mutations = {
   },
   [types.ADD_USER](state, user){
     state.users[user.id] = user.user;
-    //console.log(state.users[id]);
   },
   [types.ADD_USERS](state, users){
     state.users = users;
@@ -78,6 +88,9 @@ const mutations = {
   [types.ADD_PM_CHANNEL](state, channel){
     if(!state.pms.includes(channel))
       state.pms.push(channel);
+  },
+  [types.CLEAR_CHANNELS](state){
+    state.channels = [];
   }
 }
 

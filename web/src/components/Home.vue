@@ -8,7 +8,7 @@
           <span v-show="group == 'pm'">{{channel}}</span>
         </a>
         <ul class="left hide-on-med-and-down">
-          <li v-show="group != 'pm'"><a>{{group}} : {{channel}}</a></li>
+          <li v-show="group != 'pm'"><a>{{group}}: {{channel}}</a></li>
           <li v-show="group == 'pm'"><a>{{channel}}</a></li>
         </ul>
       </div>
@@ -22,9 +22,9 @@
         </div>
       </li>
       <div v-for="gc in channels" v-if="gc.group != 'pm'">
-        <li><a class="subheader">{{gc.group}}</a></li>
+        <li><a><a class="subheader">{{gc.group}}</a><i class="material-icons" style="cursor:pointer;" >add</i></a></li>
         <li v-for="channel in gc.channels">
-          <a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a>
+          <a><a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a><i class="material-icons" style="cursor:pointer;" v-on:click="showadduser">add</i></a>
         </li>
       </div>
       <div v-if="pms.length > 0">
@@ -89,12 +89,14 @@
         </form>
       </div>
     </div>
+    <AddUser id="adduser-modal" class="modal" v-bind:group="group" v-bind:channel="channel" v-on:adduser="added_user"/>
     <div class="valign-wrapper center-align" v-show="token == undefined">
         <p>Redirecting to login... If you are not redirected, please go <a v-bind:href="redirect_uri">here.</a></p>
     </div>
   </div>
 </template>
 <script>
+  import async from 'async'
   import Cookies from 'js-cookie'
   import crypto from 'crypto'
   import socketCluster from 'socketcluster-client'
@@ -105,6 +107,8 @@
 
   import {mapGetters} from 'vuex'
 
+  import AddUser from './AddUser.vue'
+
   var nonce = crypto.randomBytes(32).toString('base64').slice(0, 32).replace(/\+/g, '0').replace(/\//g, '0');
   var socket = null;
 
@@ -114,6 +118,7 @@
   };
 
   export default {
+    components : { AddUser },
     data : function(){
       return {
         group : '',
@@ -143,7 +148,7 @@
         this.group = group;
         this.channel = channel;
         Cookies.set('gc', {group : this.group, channel : this.channel});
-        setTimeout(function(){
+        setTimeout(() => {
           $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
           $('#chatView').scrollTop = $('#chatView').scrollHeight;
         }, 10);
@@ -151,13 +156,14 @@
       logout : function(event){
         this.channels.forEach(function(gc){
           gc.channels.forEach(function(channel){
-            socket.unsubscribe(gc.group + '+' + channel);
+            socket.unsubscribe('chat:' + gc.group + '+' + channel);
           });
         });
-        socket.emit('logout', {}, function(){
+        socket.unsubscribe('pm:' + this.user_info.sub);
+        socket.emit('logout', {}, () => {
           this.$store.dispatch('logout');
           this.$router.go(this.$router.currentRoute);
-        }.bind(this));
+        });
       },
       render_time : messagesAPI.render_time,
       send : function(event){
@@ -184,7 +190,7 @@
               err ? toastr.error(err) : this.message = "";
             }.bind(this));
           }else{
-            socket.publish(this.group + '+' + this.channel, {message : this.message, type : 'm'}, function(err){
+            socket.publish('chat:' + this.group + '+' + this.channel, {message : this.message, type : 'm'}, function(err){
               err ? toastr.error(err) : this.message = "";
             }.bind(this));
           }
@@ -216,7 +222,7 @@
               err ? toastr.error(err) : this.message = "";
             }.bind(this));
           }else{
-            socket.publish(this.group + '+' + this.channel, {message : {filename : res.body.filename, originalname : res.body.originalname}, type : 'f'}, function(err){
+            socket.publish('chat:' + this.group + '+' + this.channel, {message : {filename : res.body.filename, originalname : res.body.originalname}, type : 'f'}, function(err){
               err ? toastr.error(err) : this.message = "";
             }.bind(this));
           }
@@ -240,7 +246,9 @@
           }
           this.channels.forEach(function(gc){
             gc.channels.forEach(function(channel){
-              socket.subscribe(gc.group + '+' + channel, {waitForAuth : true}).watch(function(data){
+              socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch(function(data){
+                console.log(data.user);
+                console.log(this.users);
                 this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(function(){
                   $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
                   $('#chatView').scrollTop = $('#chatView').scrollHeight;
@@ -257,7 +265,6 @@
         }.bind(this));
         socket.subscribe('pm:' + this.user_info.sub, {waitForAuth : true}).watch(function(data){
           if(!this.pms.includes(data.user)){
-            console.log('foo');
             this.$store.dispatch('add_pm_channel', data.user);
           }
           this.$store.dispatch('add_message', {message : data, gc : 'pm' + '+' + data.user}).then(function(){
@@ -265,6 +272,43 @@
             $('#chatView').scrollTop = $('#chatView').scrollHeight;
           }.bind(this));
         }.bind(this));
+        socket.subscribe('update:' + this.user_info.sub, {waitForAuth : true}).watch((data) => {
+          if(data.action == 'refresh_channels'){
+            console.log('Updating');
+            this.channels.forEach((gc) => {
+              gc.channels.forEach((channel) => {
+                socket.unsubscribe('chat:' + gc.group + '+' + channel);
+                socket.unwatch('chat:' + gc.group + '+' + channel);
+              });
+            });
+            this.$store.dispatch('refresh_channels', this.token).then(() => {
+              async.each(Object.keys(this.users), (userid, cb) => {
+                async.each(this.channels, (gc, cb1) => {
+                  async.each(gc.channels, (channel, cb2) => {
+                    socket.publish('update:' + userid, {action : "refresh_users", scope : {group : gc.group, channel : channel}}, cb2);
+                  }, cb1);
+                }, cb);
+              }, () => {});
+              this.$store.dispatch('init_messages', {channels : this.channels, token : this.token}).then(() => {
+                $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                $('#chatView').scrollTop = $('#chatView').scrollHeight;
+              });
+              this.channels.forEach((gc) => {
+                gc.channels.forEach((channel) => {
+                  socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
+                    this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
+                      $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                      $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                    });
+                  });
+                });
+              });
+            });
+          }else if(data.action == 'refresh_users'){
+            console.log('Refreshing users');
+            this.$store.dispatch('refresh_channel_users', {gc : data.scope, token : this.token});
+          }
+        });
       },
       chat_scroll : function(event){
         if($('#chatView').scrollTop() == 0){
@@ -299,6 +343,17 @@
       },
       render_pm_user : function(users){
         return users.replace(this.user_info.sub, '');
+      },
+      showadduser : function(event){
+        $('#adduser-modal').modal('open');
+      },
+      added_user : function(event){
+        async.each(event, (userid, cb) => {
+          socket.publish('update:' + userid, {action : "refresh_channels"}, function(err){
+            if(err) console.log(err);
+            cb();
+          });
+        }, () => {});
       }
     },
     mounted : function(){

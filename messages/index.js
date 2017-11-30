@@ -42,6 +42,11 @@ var permissions_design = {
         emit(doc.user, doc.value);
       }
     },
+    'by_action' : {
+      'map' : function(doc){
+        emit(doc.action, doc.value);
+      }
+    },
     'by_action_scope' : {
       'map' : function(doc){
         emit([doc.action, doc.scope], doc.value);

@@ -4,10 +4,22 @@ var cors = require("cors");
 
 var basicauth = require("basic-auth");
 var bcrypt = require("bcrypt");
+var crypto = require("crypto");
 var salt_rounds = 10;
 var uniqid = require("uniqid");
 
 var colors = require("colors");
+
+var redis = require("redis");
+var cache = redis.createClient({
+  host : 'redis',
+  port : 6379
+});
+var user_cache = redis.createClient({
+  host : 'redis',
+  port : 6379,
+  db : 1
+});
 
 var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
 var creator = require("couchdb-creator");
@@ -59,6 +71,11 @@ var permissions_design = {
         emit(doc.user, doc._id);
       }
     },
+    'by_action' : {
+      'map' : function(doc){
+        emit(doc.action, doc.value);
+      }
+    },
     'by_action_scope' : {
       'map' : function(doc){
         emit([doc.action, doc.scope], doc.value);
@@ -78,7 +95,6 @@ app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
 
 var getAuth = function(req, res, next){
-  console.log(req.get('Authorization'));
   var user = basicauth(req);
   if(user){
     req.auth = {};
@@ -90,19 +106,6 @@ var getAuth = function(req, res, next){
       message : "No auth header"
     });
   }
-  //
-  // var authHeader = req.get('Authorization');
-  // if(authHeader && authHeader.split(' ')[0] == 'Basic'){
-  //   req.auth = {};
-  //   var userpass = authHeader.split(' ')[1];
-  //   req.auth.username = userpass.split(':')[0];
-  //   req.auth.pass = userpass.split(':')[1];
-  //   next();
-  // }else{
-  //   res.status(400).json({
-  //     message : "No auth header"
-  //   });
-  // }
 }
 
 /**
@@ -116,6 +119,27 @@ var getAuth = function(req, res, next){
 app.get("/", function(req, res){
   res.status(200).json({
     message : "Received at Admin API"
+  });
+});
+
+app.get('/user/:id', function(req, res){
+  users.get(req.params.id, function(get_err, user){
+    if(get_err){
+      res.status(500).json({
+        message : get_err.message
+      });
+    }else{
+      res.status(200).json({
+        message : "Success",
+        user : {
+          name : user.name,
+          username : user.username,
+          email : user.email,
+          dob : user.dob,
+          gender : user.gender
+        }
+      });
+    }
   });
 });
 
@@ -195,6 +219,14 @@ app.post("/user", getAuth, function(req, res){
             });
           }else{
             users.get(body.id, function(uerr, user){
+              cache.hget('usernames', user.name.toUpperCase(), function(cache_err, val){
+                if(val){
+                  if(!val.includes(user._id))
+                    cache.hset('usernames', user.name.toUpperCase(), val + user._id + '+', redis.print);
+                }else{
+                  cache.hset('usernames', user.name.toUpperCase(), user._id + '+', redis.print);
+                }
+              });
               res.status(200).json({
                 message : "Success!",
                 user : user
@@ -235,6 +267,22 @@ app.post("/user/:id", getAuth, function(req, res){
         user_data.password = user.password;
       }
       user_data._rev = user._rev;
+      cache.hget('usernames', row.doc.name.toUpperCase(), function(cache_err, val){
+        if(val){
+          if(!val.includes(row.id))
+            cache.hset('usernames', row.doc.name.toUpperCase(), val + row.id + '+', redis.print);
+        }else{
+          cache.hset('usernames', row.doc.name.toUpperCase(), row.id + '+', redis.print);
+        }
+      });
+      cache.hget('usernames', row.doc.username.toUpperCase(), function(cache_err, val){
+        if(val){
+          if(!val.includes(row.id))
+            cache.hset('usernames', row.doc.username.toUpperCase(), val + row.id + '+', redis.print);
+        }else{
+          cache.hset('usernames', row.doc.username.toUpperCase(), row.id + '+', redis.print);
+        }
+      });
       nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
       users.insert(user_data, req.params.id, function(ins_err, body){
         nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984"
@@ -304,7 +352,7 @@ app.delete("/user/:id", getAuth, function(req, res){
 app.post("/client", getAuth, function(req, res){
   var client = {
     name : req.body.name,
-    secret : uniqid(),
+    secret : crypto.createHmac('sha256', uniqid()).update(uniqid()).digest('hex'),
     redirect_uris : req.body.redirect_uri
   };
   nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
@@ -323,45 +371,6 @@ app.post("/client", getAuth, function(req, res){
       });
     }
   });
-});
-
-/**
- * @api {post} /perms Post new permissions
- * @apiName New permissions
- * @apiDescription Adds a new permission for a user to the database
- * @apiGroup Permissions
- *
- *
- */
-app.post("/perms", function(req, res){
-  if(req.body.role){
-    if(req.body.user){
-      perms.insert({
-        channel : req.body.channel,
-        role : req.body.role,
-        user : req.body.user
-      }, function(err, perm){
-        if(err){
-          res.status(400).json({
-            message : "err",
-            data : err
-          });
-        }else{
-          res.status(200).json({
-            message : "Success!"
-          });
-        }
-      });
-    }else{
-      res.status(400).json({
-        message : "Missing user id param"
-      });
-    }
-  }else{
-    res.status(400).json({
-      message : "Missing role param"
-    });
-  }
 });
 
 app.post("/channel", getAuth, function(req, res){
@@ -422,6 +431,11 @@ app.post("/channel/user",  getAuth, function(req, res){
             },{
               user : user._id,
               action : 'send_file',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : "1"
+            },{
+              user : user._id,
+              action : 'add_user',
               scope : {group : req.body.group, channel : req.body.channel},
               value : "1"
             }]}, function(ins_err, body){

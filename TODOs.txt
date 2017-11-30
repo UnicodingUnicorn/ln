@@ -53,7 +53,7 @@ File uploads:
 ✔ Keep track of file names @done(2017-10-03 06:16)
 Chat Extensions:
 ✔ Usernames @done(2017-10-11 20:43)
-☐ Private Messaging
+✔ Private Messaging @done(2017-10-20 15:41)
 ☐ User search
 ✔ Client side message store @done(2017-09-25 00:26)
 ✔ Message object carries message type (message, file etc.) @done(2017-09-30 06:22)

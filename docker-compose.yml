@@ -20,11 +20,17 @@ services:
     networks:
       - minionet
     environment:
-      - MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
-      - MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY
+      - MINIO_ACCESS_KEY=ACCESS_KEY
+      - MINIO_SECRET_KEY=SECRET_KEY
     volumes:
       - ./minio:/export
     command: minio server /export
+  redis:
+    image: redis
+    ports:
+      - "6379:6379" #Open temporarily for debugging
+    networks:
+      - redisnet
   admin:
     build: ./admin
     tty: true
@@ -38,6 +44,7 @@ services:
       - couchdb
     networks:
       - couchnet
+      - redisnet
   openid:
     build: ./openid
     tty: true
@@ -54,31 +61,34 @@ services:
     networks:
       - couchnet
       - memnet
-  web:
-    image: httpd
-    volumes:
-      - ./web/dist:/usr/local/apache2/htdocs/
-    ports:
-      - "10200:80"
+  # web:
+  #   image: httpd
+  #   volumes:
+  #     - ./web/dist:/usr/local/apache2/htdocs/
+  #   ports:
+  #     - "10200:80"
   chat:
     build: ./chat
+    tty: true
     environment:
       - SOCKETCLUSTER_PORT=10203
-      - SECRET=H1o8nmd_-
+      - SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
       - COUCHDB_USER=admin
       - COUCHDB_PASSWORD=password
     ports:
       - "10203:10203"
     depends_on:
       - couchdb
+      - redis
     networks:
       - couchnet
+      - redisnet
   messages:
     build: ./messages
     tty: true
     environment:
       - MESSAGES_PORT=10204
-      - SECRET=H1o8nmd_-
+      - SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
       - COUCHDB_USER=admin
       - COUCHDB_PASSWORD=password
     ports:
@@ -100,21 +110,23 @@ services:
       - ACCOUNTS_PORT=10206
       - COUCHDB_USER=admin
       - COUCHDB_PASSWORD=password
-      - SECRET=H1o8nmd_-
+      - SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
     ports:
       - "10206:10206"
     depends_on:
       - couchdb
+      - redis
     networks:
       - couchnet
+      - redisnet
   files:
     build: ./files
     tty: true
     environment:
       - FILES_PORT=10207
-      - MINIO_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE
-      - MINIO_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCY
-      - SECRET=H1o8nmd_-
+      - MINIO_ACCESS_KEY=ACCESS_KEY
+      - MINIO_SECRET_KEY=SECRET_KEY
+      - SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
     ports:
       - "10207:10207"
     depends_on:
@@ -138,3 +150,4 @@ networks:
   couchnet:
   memnet:
   minionet:
+  redisnet:

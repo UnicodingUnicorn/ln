@@ -1,3 +1,4 @@
+var SCWorker = require('socketcluster/scworker');
 var fs = require('fs');
 var express = require('express');
 var serveStatic = require('serve-static');
@@ -9,7 +10,18 @@ var jwt = require("jsonwebtoken");
 var secret = process.env.SECRET;
 
 var async = require("async");
-var creator = require("couchdb-creator")
+var creator = require("couchdb-creator");
+var redis = require("redis");
+var cache = redis.createClient({
+  host : 'redis',
+  port : 6379,
+  db : 0
+});
+var user_cache = redis.createClient({
+  host : 'redis',
+  port : 6379,
+  db : 1
+});
 
 var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
 
@@ -83,6 +95,11 @@ var permissions_design = {
         emit(doc.user, doc._id);
       }
     },
+    'by_action' : {
+      'map' : function(doc){
+        emit(doc.action, doc.value);
+      }
+    },
     'by_action_scope' : {
       'map' : function(doc){
         emit([doc.action, doc.scope], doc.value);
@@ -93,140 +110,143 @@ var permissions_design = {
 var permissions;
 creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
   permissions = db;
+  permissions.view('permissions', 'by_action', {
+    key : 'send_message',
+    include_docs : true
+  }, function(get_err, perms){
+    if(get_err){
+      console.error(get_err);
+    }else{
+      async.each(perms.rows, (row, cb) => {
+        user_cache.hset(row.doc.user, row.doc.scope.group + '+' + row.doc.scope.channel, 1);
+        cb();
+      }, () => {});
+    }
+  });
 });
 
-module.exports.run = function (worker) {
-  console.log('   >> Worker PID:', process.pid);
-  var environment = worker.options.environment;
+class Worker extends SCWorker {
+  run() {
+    console.log('   >> Worker PID:', process.pid);
+    var environment = this.options.environment;
 
-  var app = express();
+    var app = express();
 
-  var httpServer = worker.httpServer;
-  var scServer = worker.scServer;
+    var httpServer = this.httpServer;
+    var scServer = this.scServer;
 
-  if (environment == 'dev') {
-    // Log every HTTP request. See https://github.com/expressjs/morgan for other
-    // available formats.
-    app.use(morgan('dev'));
-  }
-  //app.use(serveStatic(path.resolve(__dirname, 'public')));
-
-  // Add GET /health-check express route
-  healthChecker.attach(worker, app);
-
-  httpServer.on('request', app);
-
-  var count = 0;
-
-  //Authentication
-  scServer.addMiddleware(scServer.MIDDLEWARE_PUBLISH_IN, function(req, next){
-    var authToken = req.socket.authToken;
-    if(authToken){
-      if(req.channel.split('+')[0] == 'pm'){
-        next();
-      }else{
-        authToken.channels.includes(req.channel) ? next() : next("Unrecognised channel");
-      }
-    }else{
-      next("Invalid auth token");
+    if (environment == 'dev') {
+      // Log every HTTP request. See https://github.com/expressjs/morgan for other
+      // available formats.
+      app.use(morgan('dev'));
     }
-  });
 
-  //Message logging and metadata
-  scServer.addMiddleware(scServer.MIDDLEWARE_PUBLISH_OUT, function(req, next){
-    var authToken = req.socket.authToken;
-    if(authToken){
-      if(req.channel.split(':')[0] == 'pm'){
-        next();
-      }else{
-        var datetime = new Date();
-        //Add metadata
-        req.data.datetime = datetime;
-        req.data.user = authToken.userid;
-        var gc = req.channel.split('+');
-        req.data.channel = {group : gc[0], channel : gc[1]};
-        //Log message
-        messages.insert(req.data, datetime.getTime() + "&" + req.data.user, function(err, message){
-          err ? next(err) : next();
-        });
-      }
-    }else{
-      next("Invalid auth token");
-    }
-  });
+    app.get('/', function(req, res){
+      res.status(200).json({
+        message : "Received at chat socketcluster."
+      });
+    });
 
-  scServer.addMiddleware(scServer.MIDDLEWARE_EMIT, function(req, next){
-    if(req.event == 'pm'){
-      if(req.socket.authToken){
-        if(req.socket.authToken.userid == req.data.sender){
+    // Add GET /health-check express route
+    healthChecker.attach(this, app);
+
+    httpServer.on('request', app);
+
+    //Authentication
+    scServer.addMiddleware(scServer.MIDDLEWARE_PUBLISH_IN, function(req, next){
+      var authToken = req.socket.authToken;
+      if(authToken){
+        var identifier = req.channel.split(':')[0];
+        if(identifier == 'pm'){
           next();
-        }else{
-          next("Invalid auth token");
+        }else if(identifier == 'chat'){
+          user_cache.hexists(authToken.userid, req.channel.split(':')[1], (err, perm) => {
+            if(perm){
+              var datetime = new Date();
+              //Add metadata
+              req.data.datetime = datetime;
+              req.data.user = authToken.userid;
+              var gc = req.channel.split(':')[1].split('+');
+              req.data.channel = {group : gc[0], channel : gc[1]};
+              //Log message
+              messages.insert(req.data, datetime.getTime() + "&" + req.data.user, function(err, message){
+                err ? next(err) : next();
+              });
+            }else{
+              next("Unrecognised channel");
+            }
+          });
+        }else if(identifier == 'update'){
+          next();
         }
       }else{
         next("Invalid auth token");
       }
-    }else{
-      next();
-    }
-  });
+    });
 
-  scServer.on('connection', function (socket) {
-    socket.on('login', function(data, respond){
-      //Verify the token first
-      jwt.verify(data.token, secret, function(auth_err, decoded){
-        if(auth_err){
-          respond("Invalid token");
+    scServer.addMiddleware(scServer.MIDDLEWARE_EMIT, function(req, next){
+      if(req.event == 'pm'){
+        if(req.socket.authToken){
+          if(req.socket.authToken.userid == req.data.sender){
+            next();
+          }else{
+            next("Invalid auth token");
+          }
         }else{
-          permissions.view('permissions', 'by_user_action', {
-            key : [decoded.sub, 'send_message'],
-            include_docs : true
-          }, function(view_err, roles){
-            if(view_err){
-              err.statusCode == 404 ? respond("User not found") : respond("Error");
-            }else{
-              var channels = [];
-              async.each(roles.rows, function(row, cb){
-                channels.push(row.doc.scope.group + '+' + row.doc.scope.channel);
-                cb();
-              }, function(err){
-                if(channels.length > 0){
-                  socket.setAuthToken({
-                    userid : decoded.sub,
-                    channels : channels
-                  });
-                  respond();
-                }else{
-                  respond("User not found");
-                }
-              });
-            }
-          });
+          next("Invalid auth token");
         }
+      }else{
+        next();
+      }
+    });
+
+    /*
+      In here we handle our incoming realtime connections and listen for events.
+    */
+    scServer.on('connection', function (socket) {
+      socket.on('login', function(data, respond){
+        //Verify the token first
+        jwt.verify(data.token, secret, function(auth_err, decoded){
+          if(auth_err){
+            respond("Invalid token");
+          }else{
+            cache.hexists('users', decoded.sub, (err, exists) => {
+              if(exists){
+                socket.setAuthToken({
+                  userid : decoded.sub
+                });
+                respond();
+              }else{
+                respond("User not found");
+              }
+            });
+          }
+        });
+      });
+      socket.on('pm', function(data, respond){
+        var message = {};
+        var datetime = new Date();
+        message.datetime = datetime;
+        message.user = data.sender;
+        message.users = data.sender < data.recipient ? data.sender + '+' + data.recipient : data.recipient + '+' + data.sender;
+        message.message = data.message;
+        message.type = data.type;
+
+        pms.insert(message, datetime.getTime() + "&" + data.sender, function(err, ins_message){
+          if(err){
+            respond(err.message);
+          }else{
+            scServer.exchange.publish('pm:' + data.recipient, message);
+            respond();
+          }
+        });
+      });
+      socket.on('logout', function(data, respond){
+        socket.deauthenticate();
+        respond();
       });
     });
-    socket.on('pm', function(data, respond){
-      var message = {};
-      var datetime = new Date();
-      message.datetime = datetime;
-      message.user = data.sender;
-      message.users = data.sender < data.recipient ? data.sender + '+' + data.recipient : data.recipient + '+' + data.sender;
-      console.log(data.message);
-      message.message = data.message;
-      message.type = data.type;
+  }
+}
 
-      pms.insert(message, datetime.getTime() + "&" + data.sender, function(err, ins_message){
-        if(err){
-          respond(err.message);
-        }else{
-          scServer.exchange.publish('pm:' + data.recipient, message);
-          respond();
-        }
-      });
-    });
-    socket.on('logout', function(data, respond){
-      socket.deauthenticate();
-      respond();
-    });
-  });
-};
+new Worker();
