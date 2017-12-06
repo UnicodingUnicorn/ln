@@ -96,6 +96,19 @@ var pms_design = {
 creator(nano, 'pms', {name : 'pms', doc : pms_design}, function(db){
   pms = db;
 });
+var channels_design = {
+  'views' : {
+    'by_group_channel' : {
+      'map' : function(doc){
+        emit([doc.group, doc.channel], doc._id);
+      }
+    }
+  }
+}
+var channels;
+creator(nano, 'channels', {name : 'channels', doc : channels_design}, function(db){
+  channels = db;
+});
 
 var app = express();
 app.use(bodyParser.json());
@@ -204,12 +217,23 @@ app.get("/channels", function(req, res){
   if(req.get('User')){
     permissions.view("permissions", "by_user_action", {
       key : [req.get('User'), 'view_channel']
-    }, function(view_err, channels){
+    }, (view_err, channel_rows) => {
       var return_channels = [];
-      async.each(channels.rows, function(channel, cb){
-        return_channels.push(channel.value);
-        cb();
-      }, function(err){
+      async.each(channel_rows.rows, (channel, cb) => {
+        channels.view('channels', 'by_group_channel', {
+          key : [channel.value.group, channel.value.channel],
+          include_docs : true
+        }, (view_err, ch_rows) => {
+          async.each(ch_rows.rows, (row, cb2) => {
+            return_channels.push({
+              group : row.doc.group,
+              channel : row.doc.channel,
+              users : row.doc.users
+            });
+            cb2();
+          }, cb);
+        });
+      }, () => {
         res.status(200).json(return_channels);
       });
     });

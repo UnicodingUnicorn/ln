@@ -1,8 +1,12 @@
 <template>
   <form v-on:submit.prevent="adduser">
-    <div class="row modal-content">
-      <h4>Add a user</h4>
-      <div class="chips chips-autocomplete"></div>
+    <div class="modal-content">
+      <h4>Add a user to {{group}}:{{channel}}</h4>
+      <div class="row">
+        <div class="col s12">
+          <div id="adduser-chips" class="chips chips-autocomplete"></div>
+        </div>
+      </div>
     </div>
     <div class="modal-footer">
       <input type="submit" class="modal-close waves-effect waves-green btn-flat" value="Add User">
@@ -25,7 +29,7 @@
         suggestions[username] = null;
         cb();
       }, function(){
-        $('.chips-autocomplete').material_chip({
+        $('#adduser-chips').material_chip({
           placeholder: 'Add a user',
           secondaryPlaceholder: 'Add a user',
           autocompleteOptions : {
@@ -47,7 +51,7 @@
     props : ['group', 'channel'],
     methods : {
       adduser : function(){
-        var users = $('.chips-autocomplete').material_chip('data');
+        var users = $('#adduser-chips').material_chip('data');
         var userids = [];
         console.log(users);
         async.each(users, (user, cb) => {

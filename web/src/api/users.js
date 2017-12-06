@@ -31,7 +31,7 @@ export default{
     });
   },
   get_users(gc, token, cb){
-    Vue.http.get(auth.withAuth(token, options.ACCOUNTS_URL + '/users/' + JSON.stringify(gc)), {
+    Vue.http.get(auth.withAuth(token, options.ACCOUNTS_URL + '/users/' + JSON.stringify({group : gc.group, channel : gc.channel})), {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(

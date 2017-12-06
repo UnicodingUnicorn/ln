@@ -387,6 +387,7 @@ app.post("/channel", getAuth, function(req, res){
           message: err.message
         });
       }else{
+        cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([]));
         res.status(200).json({
           message : "Success"
         });
@@ -407,7 +408,7 @@ app.post("/channel/user",  getAuth, function(req, res){
   }, function(chan_err, channel_docs){
     if(chan_err){
       res.status(500).json({
-        message : chan_err.message
+        message : chan_err.reason
       });
     }else{
       console.log(channel_docs);
@@ -444,9 +445,22 @@ app.post("/channel/user",  getAuth, function(req, res){
                   message : ins_err.message
                 });
               }else{
+                user_cache.hexists(req.body.user, req.body.group, (exists_err, group_exists) => {
+                  if(!group_exists){
+                    permissions.insert({
+                      user : req.body.user,
+                      action : 'add_channel',
+                      scope : req.body.group,
+                      value : "1"
+                    }, (ins_channel_err, ins_channel_body) => {
+                      user_cache.hset(req.body.user, req.body.group, 1);
+                    });
+                  }
+                });
                 var channel = channel_docs.rows[0].doc;
                 if(!channel.users.includes(user._id))
                   channel.users.push(user._id);
+                user_cache.hset(req.body.user, req.body.group + '+' + req.body.channel, 1);
                 channels.insert(channel, function(mod_err, mod_bod){
                   if(mod_err){
                     res.send(mod_err)

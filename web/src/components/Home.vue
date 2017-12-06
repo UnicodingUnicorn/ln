@@ -22,9 +22,9 @@
         </div>
       </li>
       <div v-for="gc in channels" v-if="gc.group != 'pm'">
-        <li><a><a class="subheader">{{gc.group}}</a><i class="material-icons" style="cursor:pointer;" >add</i></a></li>
+        <li><a><a class="subheader">{{gc.group}}</a><i class="material-icons" style="cursor:pointer;" v-on:click="showaddchannel(gc.group)">add</i></a></li>
         <li v-for="channel in gc.channels">
-          <a><a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a><i class="material-icons" style="cursor:pointer;" v-on:click="showadduser">add</i></a>
+          <a><a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a><i class="material-icons" style="cursor:pointer;" v-on:click="showadduser(gc.group, channel)">add</i></a>
         </li>
       </div>
       <div v-if="pms.length > 0">
@@ -89,7 +89,8 @@
         </form>
       </div>
     </div>
-    <AddUser id="adduser-modal" class="modal" v-bind:group="group" v-bind:channel="channel" v-on:adduser="added_user"/>
+    <AddUser id="adduser-modal" class="modal" v-bind:group="add_group" v-bind:channel="add_channel" v-on:adduser="added_user"/>
+    <AddChannel id="addchannel-modal" class="modal" v-bind:group="add_group" v-on:addchannel="added_channel" />
     <div class="valign-wrapper center-align" v-show="token == undefined">
         <p>Redirecting to login... If you are not redirected, please go <a v-bind:href="redirect_uri">here.</a></p>
     </div>
@@ -108,6 +109,7 @@
   import {mapGetters} from 'vuex'
 
   import AddUser from './AddUser.vue'
+  import AddChannel from './AddChannel.vue'
 
   var nonce = crypto.randomBytes(32).toString('base64').slice(0, 32).replace(/\+/g, '0').replace(/\//g, '0');
   var socket = null;
@@ -118,12 +120,14 @@
   };
 
   export default {
-    components : { AddUser },
+    components : { AddUser, AddChannel },
     data : function(){
       return {
         group : '',
         channel : '',
         message : '',
+        add_group : '',
+        add_channel : '',
         current_messages : [],
         redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/')
       }
@@ -344,12 +348,26 @@
       render_pm_user : function(users){
         return users.replace(this.user_info.sub, '');
       },
-      showadduser : function(event){
+      showadduser : function(addgroup, addchannel){
+        this.add_group = addgroup;
+        this.add_channel = addchannel;
         $('#adduser-modal').modal('open');
       },
-      added_user : function(event){
-        async.each(event, (userid, cb) => {
-          socket.publish('update:' + userid, {action : "refresh_channels"}, function(err){
+      added_user : function(added_users){
+        async.each(added_users, (userid, cb) => {
+          socket.publish('update:' + userid, {action : "refresh_channels"}, (err) => {
+            if(err) console.log(err);
+            cb();
+          });
+        }, () => {});
+      },
+      showaddchannel : function(addgroup){
+        this.add_group = addgroup;
+        $('#addchannel-modal').modal('open');
+      },
+      added_channel : function(added_users){
+        async.each(added_users, (userid, cb) => {
+          socket.publish('update:' + userid, {action : "refresh_channels"}, (err) => {
             if(err) console.log(err);
             cb();
           });

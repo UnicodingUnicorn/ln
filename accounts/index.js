@@ -113,7 +113,11 @@ creator(nano, 'channels', {name : 'channels', doc : channels_design}, function(d
   channels.list({include_docs : true}, function(err, body){
     async.each(body.rows, function(row, cb){
       if(row.id != '_design/channels'){
-        cache.set(row.doc.group + '+' + row.doc.channel, JSON.stringify(row.doc.users), redis.print);
+        cache.set(row.doc.group + '+' + row.doc.channel, JSON.stringify(row.doc.users));
+        async.each(row.doc.users, (user, cb2) => {
+          perms_cache.hset(user, row.doc.group, 1);
+          cb2();
+        }, () => {});
       }
       cb();
     }, function(){
@@ -299,7 +303,7 @@ app.post('/channel/adduser', function(req, res){
         key : [req.get('User'), 'add_user', {group : req.body.group, channel : req.body.channel}]
       }, function(perm_err, perm){
         if(perm.rows[0]){
-          channels.view('channels', 'by_group_channel', {
+          channels.view('channels', 'by_group_channel', { //TODO:Remove redundant call
             key : [req.body.group, req.body.channel],
             include_docs : true
           }, function(get_err, channel){
@@ -338,9 +342,22 @@ app.post('/channel/adduser', function(req, res){
                           message : ins_err.message
                         });
                       }else{
+                        perms_cache.hexists(req.body.user, req.body.group, (exists_err, group_exists) => {
+                          if(!group_exists){
+                            permissions.insert({
+                              user : req.body.user,
+                              action : 'add_channel',
+                              scope : req.body.group,
+                              value : "1"
+                            }, (ins_channel_err, ins_channel_body) => {
+                              perms_cache.hset(req.body.user, req.body.group, 1);
+                            });
+                          }
+                        });
                         if(!channel.users.includes(req.body.user))
                           channel.users.push(req.body.user);
                         perms_cache.hset(req.body.user, req.body.group + '+' + req.body.channel, 1);
+                        cache.set(req.body.group + '+' + req.body.channel, JSON.stringify(channel.users));
                         channels.insert(channel, function(mod_err, mod_bod){
                           if(mod_err){
                             res.status(500).json({
@@ -375,6 +392,82 @@ app.post('/channel/adduser', function(req, res){
       });
     }
   });
+});
+
+app.post('/channel', function(req, res){
+  if(!req.body.group){
+    res.status(400).json({
+      message : "No group found"
+    });
+  }else if(!req.body.channel){
+    res.status(400).json({
+      message : "No channel found"
+    });
+  }else{
+    cache.exists(req.body.group + '+' + req.body.channel, (exists_err, gc_exists) => {
+      if(gc_exists){
+        res.status(200).json({
+          message : "Success"
+        });
+      }else{
+        permissions.view('permissions', 'by_user_action_scope', {
+          key : [req.get('User'), 'add_channel', req.body.group]
+        }, (view_err, perm) => {
+          if(perm.rows[0]){
+            permissions.bulk({docs : [{
+              user : req.get('User'),
+              action : 'send_message',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : "1"
+            },{
+              user : req.get('User'),
+              action : 'view_channel',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : {group : req.body.group, channel : req.body.channel}
+            },{
+              user : req.get('User'),
+              action : 'send_file',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : "1"
+            },{
+              user : req.get('User'),
+              action : 'add_user',
+              scope : {group : req.body.group, channel : req.body.channel},
+              value : "1"
+            }]}, (ins_err, body) => {
+              if(ins_err){
+                res.status(500).json({
+                  message : ins_err.message
+                });
+              }else{
+                perms_cache.hset(req.get('User'), req.body.group + '+' + req.body.channel, 1);
+                channels.insert({
+                  group : req.body.group,
+                  channel : req.body.channel,
+                  users : [ req.get('User') ]
+                }, (ins_err, ins_body) => {
+                  if(ins_err){
+                    res.status(500).json({
+                      message : "Database error"
+                    });
+                  }else{
+                    cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([ req.get('User') ]));
+                    res.status(200).json({
+                      message : "Success"
+                    });
+                  }
+                });
+              }
+            });
+          }else{
+            res.status(403).json({
+              message : "No permission"
+            });
+          }
+        });
+      }
+    });
+  }
 });
 
 app.listen(process.env.ACCOUNTS_PORT, function(err){
