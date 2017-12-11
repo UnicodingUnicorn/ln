@@ -2,7 +2,7 @@
 
 Web frontend for ln, utilising the [vue](https://vuejs.org) framework and [vue-loader](https://vue-loader.vuejs.org/en/) with browserify.
 
-All the work is done in the ```Home``` component. Ignore all the others.
+All the work is done in the ```Home``` component. The modals for adding users and channels are in seperate files for readability.
 
 ## Build Setup
 

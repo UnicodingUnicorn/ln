@@ -55,7 +55,7 @@
               <span v-if="m2.type == 'm'">{{m3}}</span>
               <span v-else-if="m2.type == 'f'">
                 <a v-bind:href="file_url(m2.user, m3.filename)" v-bind:download="m2.originalname"><b>{{m3.originalname}}</b></a><br />
-                <img v-if="is_image(m3.originalname)" v-bind:src="file_url(m2.user, m3.filename)" v-bind:alt="m3.originalname" v-on:load="image_load(event)" class="materialboxed" width="90%" ><br />
+                <img v-if="is_image(m3.originalname)" v-bind:src="file_url(m2.user, m3.filename)" v-bind:alt="m3.originalname" v-on:load="image_load()" class="materialboxed" width="90%" ><br />
               </span>
             </p>
             <span class="secondary-content">{{render_time(m2.datetime)}}</span>
@@ -158,8 +158,8 @@
         }, 10);
       },
       logout : function(event){
-        this.channels.forEach(function(gc){
-          gc.channels.forEach(function(channel){
+        this.channels.forEach((gc) => {
+          gc.channels.forEach((channel) => {
             socket.unsubscribe('chat:' + gc.group + '+' + channel);
           });
         });
@@ -171,9 +171,9 @@
       },
       render_time : messagesAPI.render_time,
       send : function(event){
-        if(this.message != ""){
-          if(this.group == 'pm'){
-            this.$store.dispatch('add_message', {
+        if(this.message != ""){ //Make sure one is not working with a blank message
+          if(this.group == 'pm'){ //Sort out PMs
+            this.$store.dispatch('add_message', { //Add to local store
               message : {
                 message : this.message,
                 type : 'm',
@@ -181,29 +181,30 @@
                 user : this.user_info.sub
               },
               gc : this.group + '+' + this.channel
-            }).then(function(){
+            }).then(() => {
               $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
               $('#chatView').scrollTop = $('#chatView').scrollHeight;
             });
-            socket.emit('pm', {
+            socket.emit('pm', { //Update other guy
               sender : this.user_info.sub,
               recipient : this.channel,
               message : this.message,
               type : 'm'
-            }, function(err){
+            }, (err) => {
               err ? toastr.error(err) : this.message = "";
-            }.bind(this));
+            });
           }else{
-            socket.publish('chat:' + this.group + '+' + this.channel, {message : this.message, type : 'm'}, function(err){
+            //Publish message to channel
+            socket.publish('chat:' + this.group + '+' + this.channel, {message : this.message, type : 'm'}, (err) => {
               err ? toastr.error(err) : this.message = "";
-            }.bind(this));
+            });
           }
         }
       },
       uploadfile : function(event){
         var formData = new FormData();
         formData.append('file', $('#file_upload')[0].files[0]);
-        messagesAPI.send_file(formData, this.token, function(res){
+        messagesAPI.send_file(formData, this.token, (res) => {
           if(this.group == 'pm'){
             this.$store.dispatch('add_message', {
               message : {
@@ -213,7 +214,7 @@
                 user : this.user_info.sub
               },
               gc : this.group + '+' + this.channel
-            }).then(function(){
+            }).then(() => {
               $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
               $('#chatView').scrollTop = $('#chatView').scrollHeight;
             });
@@ -222,99 +223,102 @@
               recipient : this.channel,
               message : {filename : res.body.filename, originalname : res.body.originalname},
               type : 'f'
-            }, function(err){
+            }, (err) => {
               err ? toastr.error(err) : this.message = "";
-            }.bind(this));
+            });
           }else{
-            socket.publish('chat:' + this.group + '+' + this.channel, {message : {filename : res.body.filename, originalname : res.body.originalname}, type : 'f'}, function(err){
+            socket.publish('chat:' + this.group + '+' + this.channel, {message : {filename : res.body.filename, originalname : res.body.originalname}, type : 'f'}, (err) => {
               err ? toastr.error(err) : this.message = "";
-            }.bind(this));
+            });
           }
-        }.bind(this));
+        });
       },
       init_channels : function(){
-        this.$store.dispatch('refresh_channels', this.token).then(function(){
-          this.$store.dispatch('init_messages', {channels : this.channels, token : this.token}).then(function(){
-            $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-            $('#chatView').scrollTop = $('#chatView').scrollHeight;
-          });
-          var gc = Cookies.get('gc');
-          if(gc){
-            var gc = JSON.parse(gc);
-            this.group = gc.group;
-            this.channel = gc.channel;
-          }else{
-            this.group = this.channels[0].group;
-            this.channel = this.channels[0].channels[0];
-            Cookies.set('gc', {group : this.group, channel : this.channel});
-          }
-          this.channels.forEach(function(gc){
-            gc.channels.forEach(function(channel){
-              socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch(function(data){
-                console.log(data.user);
-                console.log(this.users);
-                this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(function(){
-                  $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-                  $('#chatView').scrollTop = $('#chatView').scrollHeight;
-                });
-              }.bind(this));
-            }.bind(this));
-          }.bind(this));
-        }.bind(this));
-        this.$store.dispatch('refresh_pms', this.token).then(function(){
-          this.$store.dispatch('init_pms', {channels : this.pms, token : this.token}).then(function(){
-            $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-            $('#chatView').scrollTop = $('#chatView').scrollHeight;
-          });
-        }.bind(this));
-        socket.subscribe('pm:' + this.user_info.sub, {waitForAuth : true}).watch(function(data){
-          if(!this.pms.includes(data.user)){
-            this.$store.dispatch('add_pm_channel', data.user);
-          }
-          this.$store.dispatch('add_message', {message : data, gc : 'pm' + '+' + data.user}).then(function(){
-            $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-            $('#chatView').scrollTop = $('#chatView').scrollHeight;
-          }.bind(this));
-        }.bind(this));
-        socket.subscribe('update:' + this.user_info.sub, {waitForAuth : true}).watch((data) => {
-          if(data.action == 'refresh_channels'){
-            console.log('Updating');
+        this.$store.dispatch('clear_messages').then(() => { //Clear any existing messages
+          this.$store.dispatch('refresh_channels', this.token).then(() => { //Populate channel messages
+            this.$store.dispatch('init_messages', {channels : this.channels, token : this.token}).then(() => {
+              $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+              $('#chatView').scrollTop = $('#chatView').scrollHeight;
+            });
+            //Set the current group from cookie
+            var gc = Cookies.get('gc');
+            if(gc){
+              var gc = JSON.parse(gc);
+              this.group = gc.group;
+              this.channel = gc.channel;
+            }else{
+              this.group = this.channels[0].group;
+              this.channel = this.channels[0].channels[0];
+              Cookies.set('gc', {group : this.group, channel : this.channel});
+            }
+            //Subscribe to message channels
             this.channels.forEach((gc) => {
               gc.channels.forEach((channel) => {
-                socket.unsubscribe('chat:' + gc.group + '+' + channel);
-                socket.unwatch('chat:' + gc.group + '+' + channel);
-              });
-            });
-            this.$store.dispatch('refresh_channels', this.token).then(() => {
-              async.each(Object.keys(this.users), (userid, cb) => {
-                async.each(this.channels, (gc, cb1) => {
-                  async.each(gc.channels, (channel, cb2) => {
-                    socket.publish('update:' + userid, {action : "refresh_users", scope : {group : gc.group, channel : channel}}, cb2);
-                  }, cb1);
-                }, cb);
-              }, () => {});
-              this.$store.dispatch('init_messages', {channels : this.channels, token : this.token}).then(() => {
-                $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-                $('#chatView').scrollTop = $('#chatView').scrollHeight;
-              });
-              this.channels.forEach((gc) => {
-                gc.channels.forEach((channel) => {
-                  socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
-                    this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
-                      $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-                      $('#chatView').scrollTop = $('#chatView').scrollHeight;
-                    });
+                socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
+                  this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
+                    $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                    $('#chatView').scrollTop = $('#chatView').scrollHeight;
                   });
                 });
               });
             });
-          }else if(data.action == 'refresh_users'){
-            console.log('Refreshing users');
-            this.$store.dispatch('refresh_channel_users', {gc : data.scope, token : this.token});
-          }
+          });
+          this.$store.dispatch('refresh_pms', this.token).then(() => {
+            this.$store.dispatch('init_pms', {channels : this.pms, token : this.token}).then(() => {
+              $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+              $('#chatView').scrollTop = $('#chatView').scrollHeight;
+            });
+          });
+          //Subscribe to PM channel
+          socket.subscribe('pm:' + this.user_info.sub, {waitForAuth : true}).watch((data) => {
+            if(!this.pms.includes(data.user))
+              this.$store.dispatch('add_pm_channel', data.user);
+            this.$store.dispatch('add_message', {message : data, gc : 'pm' + '+' + data.user}).then(() => {
+              $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+              $('#chatView').scrollTop = $('#chatView').scrollHeight;
+            });
+          });
+          //Subscribe to updates channel
+          socket.subscribe('update:' + this.user_info.sub, {waitForAuth : true}).watch((data) => {
+            if(data.action == 'refresh_channels'){ //Refresh channels
+              console.log('Updating');
+              this.channels.forEach((gc) => {
+                gc.channels.forEach((channel) => {
+                  socket.unsubscribe('chat:' + gc.group + '+' + channel);
+                  socket.unwatch('chat:' + gc.group + '+' + channel);
+                });
+              });
+              this.$store.dispatch('refresh_channels', this.token).then(() => {
+                async.each(Object.keys(this.users), (userid, cb) => {
+                  async.each(this.channels, (gc, cb1) => {
+                    async.each(gc.channels, (channel, cb2) => {
+                      socket.publish('update:' + userid, {action : "refresh_users", scope : {group : gc.group, channel : channel}}, cb2);
+                    }, cb1);
+                  }, cb);
+                }, () => {});
+                this.$store.dispatch('init_messages', {channels : this.channels, token : this.token}).then(() => {
+                  $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                  $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                });
+                this.channels.forEach((gc) => {
+                  gc.channels.forEach((channel) => {
+                    socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
+                      this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
+                        $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                        $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                      });
+                    });
+                  });
+                });
+              });
+            }else if(data.action == 'refresh_users'){ //Refresh users
+              console.log('Refreshing users');
+              this.$store.dispatch('refresh_channel_users', {gc : data.scope, token : this.token});
+            }
+          });
         });
       },
-      chat_scroll : function(event){
+      chat_scroll : function(){
         if($('#chatView').scrollTop() == 0){
           console.log(this.at_max());
           if(this.group == 'pm'){
@@ -336,7 +340,7 @@
         var fileformat = filename.split('.')[filename.split('.').length - 1];
         return fileformat.match(/(jpeg)|(jpg)|(png)|(gif)/);
       },
-      image_load : function(event){
+      image_load : function(){
         $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
         $('#chatView').scrollTop = $('#chatView').scrollHeight;
         $('.materialboxed').materialbox();
@@ -344,9 +348,6 @@
       open_pm : function(event){
         this.changeGC('pm', event.target.id);
         this.$store.dispatch('add_pm_channel', event.target.id);
-      },
-      render_pm_user : function(users){
-        return users.replace(this.user_info.sub, '');
       },
       showadduser : function(addgroup, addchannel){
         this.add_group = addgroup;
@@ -401,11 +402,11 @@
       }
       if(this.token){
         socket = socketCluster.connect(socket_options);
-        socket.on('connect', function (status) {
+        socket.on('connect', (status) => {
           if(status.isAuthenticated){
             this.init_channels();
           }else{
-            socket.emit('login', {token : this.token, channel : this.group + '+' + this.channel}, function(err){
+            socket.emit('login', {token : this.token, channel : this.group + '+' + this.channel}, (err) => {
               if(err){
                 this.$router.push('/');
                 if(this.token)
@@ -413,14 +414,14 @@
               }else{
                 this.init_channels();
               }
-            }.bind(this));
+            });
           }
-        }.bind(this));
+        });
       }
-      setTimeout(function(){
+      setTimeout(() => {
         if(!this.token)
           window.location.href = this.redirect_uri;
-      }.bind(this), 1000);
+      }, 1000);
     }
   }
 </script>

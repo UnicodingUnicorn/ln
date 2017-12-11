@@ -152,12 +152,11 @@ class Worker extends SCWorker {
 
     httpServer.on('request', app);
 
-    //Authentication
     scServer.addMiddleware(scServer.MIDDLEWARE_PUBLISH_IN, function(req, next){
       var authToken = req.socket.authToken;
       if(authToken){
-        var identifier = req.channel.split(':')[0];
-        if(identifier == 'pm'){
+        var identifier = req.channel.split(':')[0]; //Get channel type
+        if(identifier == 'pm'){ //PMs have their own route
           next();
         }else if(identifier == 'chat'){
           user_cache.hexists(authToken.userid, req.channel.split(':')[1], (err, perm) => {
@@ -169,7 +168,7 @@ class Worker extends SCWorker {
               var gc = req.channel.split(':')[1].split('+');
               req.data.channel = {group : gc[0], channel : gc[1]};
               //Log message
-              messages.insert(req.data, datetime.getTime() + "&" + req.data.user, function(err, message){
+              messages.insert(req.data, datetime.getTime() + "&" + req.data.user, (err, message) => {
                 err ? next(err) : next();
               });
             }else{
@@ -184,14 +183,11 @@ class Worker extends SCWorker {
       }
     });
 
+    //Authentication for pm route
     scServer.addMiddleware(scServer.MIDDLEWARE_EMIT, function(req, next){
       if(req.event == 'pm'){
-        if(req.socket.authToken){
-          if(req.socket.authToken.userid == req.data.sender){
-            next();
-          }else{
-            next("Invalid auth token");
-          }
+        if(req.socket.authToken && req.socket.authToken.userid == req.data.sender){
+          next();
         }else{
           next("Invalid auth token");
         }
@@ -206,11 +202,11 @@ class Worker extends SCWorker {
     scServer.on('connection', function (socket) {
       socket.on('login', function(data, respond){
         //Verify the token first
-        jwt.verify(data.token, secret, function(auth_err, decoded){
+        jwt.verify(data.token, secret, function(auth_err, decoded){ //TODO:Verify via request to openid
           if(auth_err){
             respond("Invalid token");
           }else{
-            cache.hexists('users', decoded.sub, (err, exists) => {
+            user_cache.exists(decoded.sub, (err, exists) => { //Make sure user exists
               if(exists){
                 socket.setAuthToken({
                   userid : decoded.sub
@@ -223,7 +219,9 @@ class Worker extends SCWorker {
           }
         });
       });
+
       socket.on('pm', function(data, respond){
+        //Add metadata
         var message = {};
         var datetime = new Date();
         message.datetime = datetime;
@@ -232,15 +230,16 @@ class Worker extends SCWorker {
         message.message = data.message;
         message.type = data.type;
 
-        pms.insert(message, datetime.getTime() + "&" + data.sender, function(err, ins_message){
+        pms.insert(message, datetime.getTime() + "&" + data.sender, (err, ins_message) => { //Log message
           if(err){
-            respond(err.message);
+            respond(err.reason);
           }else{
             scServer.exchange.publish('pm:' + data.recipient, message);
             respond();
           }
         });
       });
+
       socket.on('logout', function(data, respond){
         socket.deauthenticate();
         respond();

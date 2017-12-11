@@ -21,7 +21,7 @@ export default{
     });
   },
   get_user(user_id, cb){
-    Vue.http.get(options.ACCOUNTS_URL + '/user/' + user_id, {
+    Vue.http.get(options.ACCOUNTS_URL + '/user?id=' + user_id, {
       responseType : 'json'
     }).then(
       function(res){
@@ -31,7 +31,7 @@ export default{
     });
   },
   get_users(gc, token, cb){
-    Vue.http.get(auth.withAuth(token, options.ACCOUNTS_URL + '/users/' + JSON.stringify({group : gc.group, channel : gc.channel})), {
+    Vue.http.get(auth.withAuth(token, options.ACCOUNTS_URL + '/users?channel=' + JSON.stringify({group : gc.group, channel : gc.channel})), {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
@@ -42,7 +42,7 @@ export default{
     });
   },
   search_name(name, cb){
-    Vue.http.get(options.ACCOUNTS_URL + '/user/by_name/' + encodeURIComponent(name), {
+    Vue.http.get(options.ACCOUNTS_URL + '/user?name=' + encodeURIComponent(name), {
       responseType : 'json'
     }).then(
       res => {
@@ -62,7 +62,7 @@ export default{
     });
   },
   add_to_channel(userid, gc, token, cb){
-    Vue.http.post(auth.withAuth(token, options.ACCOUNTS_URL + '/channel/adduser'), {
+    Vue.http.post(auth.withAuth(token, options.ACCOUNTS_URL + '/channel'), {
       user : userid,
       group : gc.group,
       channel : gc.channel

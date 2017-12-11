@@ -23,9 +23,14 @@ const actions = {
       resolve();
     });
   },
+  clear_messages({commit, state}){
+    return new Promise((resolve) => {
+      commit(types.CLEAR_MESSAGES);
+      resolve();
+    });
+  },
   init_messages({commit, state}, data){
     return new Promise((resolve, reject) => {
-      commit(types.CLEAR_MESSAGES);
       async.each(data.channels, function(gc, cb){
         async.each(gc.channels, function(channel, cb2){
           messages.get_messages({group : gc.group, channel : channel}, data.token, function(m){

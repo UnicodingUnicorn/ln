@@ -1,13 +1,7 @@
 {
-  "name": "socketcluster-sample",
-  "description": "A sample SocketCluster app",
+  "name": "chat",
+  "description": "chat socketcluster service for ln",
   "version": "1.0.0",
-  "contributors": [
-    {
-      "name": "Jonathan Gros-Dubois",
-      "email": "grosjona@yahoo.com.au"
-    }
-  ],
   "dependencies": {
     "async": "^2.6.0",
     "connect": "3.0.1",
@@ -26,14 +20,6 @@
     "socketcluster": "~9.1.2",
     "socketcluster-client": "~9.0.0"
   },
-  "keywords": [
-    "websocket",
-    "server",
-    "realtime",
-    "cluster",
-    "scalable"
-  ],
-  "readmeFilename": "README.md",
   "scripts": {
     "start": "node server.js",
     "start:docker": "node dockerwait.js && node ${SOCKETCLUSTER_MASTER_CONTROLLER:-server.js}"

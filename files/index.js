@@ -1,12 +1,11 @@
 var express = require("express");
 var bodyParser = require("body-parser");
-//var busboy = require("connect-busboy");
 var cors = require("cors");
 
 var multer = require('multer');
 var storage = multer.memoryStorage();
 var upload = multer({
-  fileSize : 2000000000, //2GB
+  fileSize : process.env.MAX_SIZE,
   storage : storage
 });
 
@@ -20,8 +19,6 @@ var mClient = new minio.Client({
 });
 
 var colours = require("colors");
-var jwt = require("jsonwebtoken");
-var secret = process.env.SECRET;
 var uniqid = require("uniqid");
 
 var app = express();
@@ -29,8 +26,6 @@ var app = express();
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
-
-// app.use(busboy());
 
 app.get('/', function(req, res){
   res.status(200).json({
@@ -41,68 +36,57 @@ app.get('/', function(req, res){
 app.options('/file', cors());
 app.post('/file', upload.single('file'), function(req, res){
   var user = req.get('User');
-  if(user){
-    if(req.file){
-      mClient.bucketExists(user, function(exists_err){
-        if(exists_err){
-          mClient.makeBucket(user, 'ap-southeast-1', function(make_err){
-            if(make_err){
-              console.log(make_err);
-              res.status(500).json({
-                message : "Error storing file"
-              });
-            }else{
-              var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length-1];
-              mClient.putObject(user, id, req.file.buffer, function(put_err, etag){
-                if(put_err){
-                  console.log(put_err);
-                  res.status(500).json({
-                    message : "Error storing file"
-                  });
-                }else{
-                  res.status(200).json({
-                    message : "Success",
-                    etag : etag
-                  });
-                }
-              });
-            }
+  if(!user){
+    res.status(403).json({
+      message : 'No permission'
+    });
+  }else if(!req.file){
+    res.status(400).json({
+      message : "File not found"
+    });
+  }else{
+    var putFile = (user, file) => { //Common function so the same code need not exist twice in this file
+      //Give inserted file random key + extension
+      var id = uniqid() + '.' + file.originalname.split('.')[file.originalname.split('.').length - 1];
+      mClient.putObject(user, id, file.buffer, (put_err, etag) => {
+        if(put_err){
+          console.log(put_err);
+          res.status(500).json({
+            message : "Error storing file"
           });
         }else{
-          var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length-1];
-          mClient.putObject(user, id, req.file.buffer, function(put_err, etag){
-            if(put_err){
-              console.log(put_err);
-              res.status(500).json({
-                message : "Error storing file"
-              });
-            }else{
-              res.status(200).json({
-                message : "Success",
-                filename : id,
-                originalname : req.file.originalname
-              });
-            }
+          res.status(200).json({
+            message : "Success",
+            filename : id,
+            originalname : file.originalname
           });
         }
       });
-    }else{
-      res.status(400).json({
-        message : "No file"
-      });
-    }
-  }else{
-    res.status(404).json({
-      message : 'No user found'
+    };
+    mClient.bucketExists(user, (exists_err) => {
+      if(exists_err){ //Create user bucket if it doesn't exist
+        mClient.makeBucket(user, 'ap-southeast-1', (make_err) => {
+          if(make_err){
+            res.status(500).json({
+              message : "Error storing file"
+            });
+          }else{
+            putFile(user, req.file);
+          }
+        });
+      }else{
+        putFile(user, req.file);
+      }
     });
   }
 });
 
+//Files are stored in bucket <userid>
 app.get('/file/:user/:id', function(req, res){
-  mClient.getObject(req.params.user, req.params.id, function(err, stream){
+  mClient.getObject(req.params.user, req.params.id, (err, stream) => {
     if(err){
       if(err.code == 'NoSuchKey'){
-        res.status(400).json({
+        res.status(404).json({
           message : "No such file"
         });
       }else{
@@ -117,5 +101,5 @@ app.get('/file/:user/:id', function(req, res){
 });
 
 app.listen(process.env.FILES_PORT, function(err){
-  err ? console.error(err) : console.log(("Files API up at " + process.env.FILES_PORT).rainbow);
+  err ? console.error(err) : console.log(("Files API up at " + process.env.FILES_PORT).green);
 })

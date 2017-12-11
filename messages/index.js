@@ -1,12 +1,16 @@
 var express = require("express");
 var bodyParser = require("body-parser");
-var bearer = require("express-bearer-token");
 var cors = require("cors");
 
 var async = require("async");
 var colour = require("colors");
-var jwt = require("jsonwebtoken");
-var secret = process.env.SECRET;
+
+var redis = require("redis");
+var cache = redis.createClient({
+  host : 'redis',
+  port : 6379,
+  db : 0
+});
 
 var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
 var creator = require("couchdb-creator");
@@ -124,91 +128,54 @@ app.get("/", function(req, res){
   });
 });
 
-app.options("/messages/:channel/:count", function(req, res){
-  res.status(200);
-});
-app.get("/messages/:channel/:count", function(req, res){
-  if(req.get('User')){
-    var gc = JSON.parse(req.params.channel);
-    permissions.view("permissions", "by_user_action_scope", {
-      key : [req.get('User'), 'view_channel', gc]
-    }, function(view_err, channels){
-      if(channels.rows[0]){
-        messages.view("messages", "by_channel", {
-          key : [gc.group, gc.channel],
-          include_docs : true,
-          limit : req.params.count,
-          descending : true
-        }, function(err, body){
-          if(err){
-            res.status(200).json({});
-          }else{
-            var messages_data = [];
-            body.rows.forEach(function(message){
-              messages_data.push({
-                user : message.doc.user,
-                datetime : message.doc.datetime,
-                message : message.doc.message,
-                type : message.doc.type
-              });
-            });
-            res.status(200).json(messages_data.reverse());
-          }
-        });
-      }else{
-        res.status(404).json({
-          message : 'No channel found'
-        });
-      }
-    });
-  }else{
+app.get("/messages/:group/:channel", function(req, res){
+  if(!req.get('User')){ //Check for user from auth
     res.status(404).json({
       message : 'No user found'
     });
-  }
-});
-
-app.options("/messages/:channel/:offset/:count", function(req, res){
-  res.status(200);
-});
-app.get("/messages/:channel/:offset/:count", function(req, res){
-  if(req.get('User')){
-    var gc = JSON.parse(req.params.channel);
-    permissions.view("permissions", "by_user_action_scope", {
-      key : [req.get('User'), 'view_channel', gc]
-    }, function(view_err, channels){
-      if(channels.rows[0]){
-        messages.view("messages", "by_channel", {
-          key : [gc.group, gc.channel],
-          include_docs : true,
-          limit : req.params.count,
-          skip : req.params.offset,
-          descending : true
-        }, function(err, body){
-          if(err){
-            res.status(200).json({});
-          }else{
-            var messages_data = [];
-            body.rows.forEach(function(message){
-              messages_data.push({
-                user : message.doc.user,
-                datetime : message.doc.datetime,
-                message : message.doc.message,
-                type : message.doc.type
-              });
-            });
-            res.status(200).json(messages_data.reverse());
-          }
-        });
-      }else{
+  }else{
+    cache.exists(req.params.group + '+' + req.params.channel, (exists_err, gc_exists) => { //Check if gc exists
+      if(!gc_exists){
         res.status(404).json({
           message : 'No channel found'
         });
+      }else{
+        permissions.view("permissions", "by_user_action_scope", { //Finally check if user has permission to view the channel
+          key : [req.get('User'), 'view_channel', {group : req.params.group, channel : req.params.channel}]
+        }, (view_err, channels) => {
+          if(!channels.rows[0]){
+            res.status(403).json({
+              message : 'No permission'
+            });
+          }else{
+            var options = {
+              key : [req.params.group, req.params.channel],
+              include_docs : true
+            };
+            //Add in count and offset if present
+            if(req.query.count)
+              options.limit = req.query.count;
+            if(req.query.offset)
+              options.offset = req.query.offset;
+            messages.view("messages", "by_channel", options, (err, body) => {
+              if(err){
+                res.status(200).json({}); //Just return an empty body
+              }else{
+                var messages_data = [];
+                body.rows.forEach((message) => {
+                  messages_data.push({
+                    user : message.doc.user,
+                    datetime : message.doc.datetime,
+                    message : message.doc.message,
+                    type : message.doc.type
+                  });
+                });
+                res.status(200).json(messages_data);
+              }
+            });
+          }
+        });
       }
-    });
-  }else{
-    res.status(404).json({
-      message : 'No user found'
     });
   }
 });
@@ -248,7 +215,7 @@ app.get('/pms', function(req, res){
   if(req.get('User')){
     pms.viewWithList("pms", "by_user", "by_user", {
       key : req.get('User')
-    }, function(view_err, body){
+    }, (view_err, body) => {
       res.status(200).json({
         message : 'Success',
         pms : body
@@ -261,15 +228,20 @@ app.get('/pms', function(req, res){
   }
 });
 
-app.get("/pms/:user/:count", function(req, res){
+app.get("/pms/:user", function(req, res){
   if(req.get('User')){
+    //Key is userid1+userid2, where userid1 < userid2 (using the weird string metrics)
     var key = req.get('User') < req.params.user ? req.get('User') + '+' + req.params.user : req.params.user + '+' + req.get('User');
-    pms.view("pms", "by_users", {
+    var options = {
       key : key,
-      limit : req.params.count,
-      include_docs : true,
-      descending : true
-    }, function(view_err, rows){
+      include_docs : true
+    };
+    //Add in count and offset if present
+    if(req.query.count)
+      options.limit = req.query.count;
+    if(req.query.offset)
+      options.offset = req.query.offset;
+    pms.view("pms", "by_users", options, (view_err, rows) => {
       if(view_err){
         if(view_err.statusCode == 404){
           res.status(200).json({
@@ -279,7 +251,7 @@ app.get("/pms/:user/:count", function(req, res){
         }
       }else{
         var return_pms = [];
-        rows.rows.forEach(function(row){
+        rows.rows.forEach((row) => {
           return_pms.push({
             user : row.doc.user,
             users : row.doc.users,
@@ -290,48 +262,7 @@ app.get("/pms/:user/:count", function(req, res){
         });
         res.status(200).json({
           message : "Success",
-          messages : return_pms.reverse()
-        });
-      }
-    });
-  }else{
-    res.status(404).json({
-      message : 'No user found'
-    });
-  }
-});
-
-app.get("/pms/:user/:offset/:count", function(req, res){
-  if(req.get('User')){
-    var key = req.get('User') < req.params.user ? req.get('User') + '+' + req.params.user : req.params.user + '+' + req.get('User');
-    pms.view("pms", "by_users", {
-      key : key,
-      limit : req.params.count,
-      skip : req.params.offset,
-      include_docs : true,
-      descending : true
-    }, function(view_err, rows){
-      if(view_err){
-        if(view_err.statusCode == 404){
-          res.status(200).json({
-            message : "Success",
-            messages : []
-          });
-        }
-      }else{
-        var return_pms = [];
-        rows.rows.forEach(function(row){
-          return_pms.push({
-            user : row.doc.user,
-            users : row.doc.users,
-            datetime : row.doc.datetime,
-            message : row.doc.message,
-            type : row.doc.type
-          });
-        });
-        res.status(200).json({
-          message : "Success",
-          messages : return_pms.reverse()
+          messages : return_pms
         });
       }
     });
@@ -343,5 +274,5 @@ app.get("/pms/:user/:offset/:count", function(req, res){
 });
 
 app.listen(process.env.MESSAGES_PORT, function(err){
-  err ? console.error(err) : console.log(("Messages API up at " + process.env.MESSAGES_PORT).rainbow);
+  err ? console.error(err) : console.log(("Messages API up at " + process.env.MESSAGES_PORT).green);
 })

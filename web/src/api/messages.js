@@ -10,7 +10,7 @@ Vue.use(Resource);
 
 export default{
   get_messages(gc, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + JSON.stringify(gc) + '/' + options.HISTORY_COUNT), {
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + gc.group + '/' + gc.channel + '?count=' + options.HISTORY_COUNT), {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
@@ -21,7 +21,7 @@ export default{
     });
   },
   get_messages_offset(gc, offset, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + JSON.stringify(gc) + '/' + offset + '/' + options.HISTORY_COUNT), {
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + gc.group + '/' + gc.channel + '?offset=' + offset + '&count=' + options.HISTORY_COUNT), {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
@@ -32,7 +32,7 @@ export default{
     });
   },
   get_pms(user, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '/' + options.HISTORY_COUNT), {
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '?count=' + options.HISTORY_COUNT), {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
@@ -43,7 +43,7 @@ export default{
     });
   },
   get_pms_offset(user, offset, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '/' + offset + '/' + options.HISTORY_COUNT), {
+    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '?offset=' + offset + '&count=' + options.HISTORY_COUNT), {
       headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
       responseType : 'json'
     }).then(
