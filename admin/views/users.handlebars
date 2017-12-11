@@ -1,0 +1,167 @@
+<nav>
+  <div class="nav-wrapper blue-grey">
+    <a href="#" class="brand-logo">ln Admin</a>
+    <ul id="nav-mobile" class="right hide-on-med-and-down sidenav">
+      <li><a href="/clients">Clients</a></li>
+      <li class="active"><a>Users</a></li>
+      <li><a href="/channels">Channels</a></li>
+      <li><a href="/logout">Logout</a></li>
+    </ul>
+  </div>
+</nav>
+{{#if success}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card-panel green">
+        <span class="white-text">{{success}}</span>
+      </div>
+    </div>
+  </div>
+{{/if}}
+{{#if error}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card-panel red">
+        <span class="white-text">{{error}}</span>
+      </div>
+    </div>
+  </div>
+{{/if}}
+
+<div class="row">
+  <div class="col s10 offset-s1">
+    <div class="card-panel blue-grey lighten-5">
+      <form class="row" action="/user" method="get">
+        <div class="col s12">
+          {{#if user}}
+            <input id="id" name="id" type="search" value="{{user.id}}" required>
+          {{else}}
+            <input id="id" name="id" type="search" required>
+          {{/if}}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{{#if user}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card blue-grey lighten-5">
+        <form action="/user" method="post">
+          <div class="card-content">
+            <span class="card-title">{{user.id}}</span>
+            <input type="hidden" name="id" value="{{user.id}}">
+            <div class="row">
+              <div class="row">
+                <div class="input-field col s12">
+                  <input type="text" placeholder="Name" name="name" id="query_name" value="{{user.name}}">
+                  <label for="query_name">Name</label>
+                </div>
+              </div>
+              <div class="row">
+                <div class="input-field col s12">
+                  <input type="text" placeholder="Username" name="username" id="query_username" value="{{user.username}}">
+                  <label for="query_username">Username</label>
+                </div>
+              </div>
+              <div class="row">
+                <div class="input-field col s12">
+                  <input type="email" placeholder="Email" name="email" id="query_email" value="{{user.email}}">
+                  <label for="query_email">Email</label>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col s12">
+                  <input name="querygender" type="radio" id="query_gender_male" value="m" {{#if (isMale user.gender)}} checked {{/if}} />
+                  <label for="query_gender_male">Male</label>
+                  &nbsp;
+                  <input name="querygender" type="radio" id="query_gender_female" value="f" {{#if (isFemale user.gender)}} checked {{/if}} />
+                  <label for="query_gender_female">Female</label>
+                </div>
+              </div>
+              <div class="row">
+                <div class="input-field col s12">
+                  <input name="dob" type="text" class="datepicker" id="query_dob" value={{user.dob}}>
+                  <label for="query_dob">D.O.B.</label>
+                </div>
+              </div>
+            </div>
+            <input class="btn waves-effect waves-light blue-grey" type="submit" value="Update user">
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+{{/if}}
+
+<div class="fixed-action-btn">
+  <a class="btn-floating btn-large blue-grey">
+    <i class="large material-icons">add</i>
+  </a>
+  <ul>
+    <li><a class="btn-floating blue-grey white-text modal-trigger" href="#newuser-modal"><i class="material-icons">edit</i></a></li>
+    <li><a class="btn-floating blue-grey white-text modal-trigger" href="#newuserfile-modal"><i class="material-icons">file_upload</i></a></li>
+  </ul>
+</div>
+
+<div id="newuser-modal" class="modal">
+  <form method="post" action="/user">
+    <div class="modal-content">
+      <h4>New User</h4>
+      <div class="row">
+        <div class="input-field col s12">
+          <input type="text" placeholder="User ID" name="id" id="userid">
+          <label for="userid">User ID</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="input-field col s12">
+          <input type="text" placeholder="Name" name="name" id="username">
+          <label for="username">Name</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="input-field col s12">
+          <input type="text" placeholder="Username" name="username" id="user-username">
+          <label for="user-username">Username</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="input-field col s12">
+          <input type="email" placeholder="Email" name="email" id="email">
+          <label for="email">Email</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="input-field col s7">
+          <input type="text" placeholder="Password" name="password" id="user-password" v-bind:disabled="autogenpass">
+          <label for="user-password">Password</label>
+        </div>
+        <p class="col s5">
+          <input type="checkbox" id="autogenpass" name="autogenpass"/>
+          <label for="autogenpass">Generate password</label>
+        </p>
+      </div>
+      <div class="row">
+        <div class="col s12">
+          <input name="gender" type="radio" id="gender_male" value="m"/>
+          <label for="gender_male">Male</label>
+          &nbsp;
+          <input name="gender" type="radio" id="gender_female" value="f"/>
+          <label for="gender_female">Female</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="input-field col s12">
+          <input name="dob" type="text" class="datepicker" id="dob">
+          <label for="dob">D.O.B.</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Add">
+      <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+    </div>
+  </form>
+</div>

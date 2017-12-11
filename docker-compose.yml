@@ -97,12 +97,12 @@ services:
       - couchdb
     networks:
       - couchnet
-  admin-frontend:
-    image: httpd
-    volumes:
-      - ./admin-frontend:/usr/local/apache2/htdocs/
-    ports:
-      - "10205:80"
+  # admin-frontend:
+  #   image: httpd
+  #   volumes:
+  #     - ./admin-frontend:/usr/local/apache2/htdocs/
+  #   ports:
+  #     - "10205:80"
   accounts:
     build: ./accounts
     tty: true

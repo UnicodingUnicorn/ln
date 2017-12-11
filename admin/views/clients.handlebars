@@ -1,0 +1,109 @@
+<nav>
+  <div class="nav-wrapper blue-grey">
+    <a href="#" class="brand-logo">ln Admin</a>
+    <ul id="nav-mobile" class="right hide-on-med-and-down sidenav">
+      <li class="active"><a>Clients</a></li>
+      <li><a href="/users">Users</a></li>
+      <li><a href="/channels">Channels</a></li>
+      <li><a href="/logout">Logout</a></li>
+    </ul>
+  </div>
+</nav>
+{{#if success}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card-panel green">
+        <span class="white-text">{{success}}</span>
+      </div>
+    </div>
+  </div>
+{{/if}}
+{{#if error}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card-panel red">
+        <span class="white-text">{{error}}</span>
+      </div>
+    </div>
+  </div>
+{{/if}}
+{{#if client_id}}
+  {{#if client_secret}}
+    <div class="row">
+      <div class="card-panel blue-grey lighten-4 col s10 offset-s1">
+        Your new client id is {{client_id}}<br />
+        Your new client secret is {{client_secret}}
+      </div>
+    </div>
+  {{/if}}
+{{/if}}
+{{#each clients}}
+  <div class="row">
+    <div class ="col s10 offset-s1">
+      <div class="card blue-grey lighten-5">
+        <div class="card-content">
+          <span class="card-title"><a class="modal-trigger" href="#{{id}}-modal">{{name}}</a></span>
+          <p>
+            ID: <b>{{id}}</b><br />
+            Secret: <b>{{secret}}</b><br />
+            Redirect URIs:<br />
+            <ul class="browser-default">
+              {{#each redirect_uris}}
+                <li><b>{{this}}</b></li>
+              {{/each}}
+            </ul>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="{{id}}-modal" class="modal">
+    <form method="post" action="/client">
+      <div class="modal-content">
+        <h4>Editing {{id}}</h4>
+        <input name="id" type="hidden" value="{{id}}">
+        <div class="row">
+          <div class="input-field col s12">
+            <input placeholder="Name" id="name" name="name" type="text" class="validate" value="{{name}}">
+            <label for="name">Name</label>
+          </div>
+          {{#each redirect_uris}}
+            <div class="input-field col s12">
+              <input id="{{uniqid}}-uri" name="{{uniqid}}-uri" type="text" class="validate" value="{{this}}">
+            </div>
+          {{/each}}
+          <div class="input-field col s12">
+            <input id="last-uri" name="last-uri" type="text" class="validate" value="" placholder="New URI">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Submit">
+        <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+      </div>
+    </form>
+  </div>
+{{/each}}
+<div class="fixed-action-btn">
+  <a class="waves-effect waves-light btn-floating btn-large blue-grey white-text modal-trigger" href="#newclient-modal"><i class="material-icons">add</i></a>
+</div>
+<div id="newclient-modal" class="modal">
+  <form method="post" action="/client">
+    <div class="modal-content">
+      <h4>New client</h4>
+      <div class="row">
+        <div class="input-field col s12">
+          <input placeholder="Name" id="name" name="name" type="text" class="validate" value="{{name}}">
+          <label for="name">Name</label>
+        </div>
+        <div class="input-field col s12">
+          <input id="last-uri" name="last-uri" type="text" class="validate" value="" placholder="New URI">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Add">
+      <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+    </div>
+  </form>
+</div>

@@ -1,0 +1,101 @@
+<nav>
+  <div class="nav-wrapper blue-grey">
+    <a href="#" class="brand-logo">ln Admin</a>
+    <ul id="nav-mobile" class="right hide-on-med-and-down sidenav">
+      <li><a href="/clients">Clients</a></li>
+      <li><a href="/users">Users</a></li>
+      <li class="active"><a>Channels</a></li>
+      <li><a href="/logout">Logout</a></li>
+    </ul>
+  </div>
+</nav>
+{{#if success}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card-panel green">
+        <span class="white-text">{{success}}</span>
+      </div>
+    </div>
+  </div>
+{{/if}}
+{{#if error}}
+  <div class="row">
+    <div class="col s10 offset-s1">
+      <div class="card-panel red">
+        <span class="white-text">{{error}}</span>
+      </div>
+    </div>
+  </div>
+{{/if}}
+
+{{#each gcs}}
+  <div class="row">
+    <ul class="collection with-header col s10 offset-s1">
+      <li class="collection-header">{{group}}</li>
+      {{#each channels}}
+        <li class="collection-item">{{this}}</li>
+      {{/each}}
+    </ul>
+  </div>
+{{/each}}
+
+<div class="fixed-action-btn">
+  <a class="btn-floating btn-large blue-grey">
+    <i class="large material-icons">add</i>
+  </a>
+  <ul>
+    <li><a class="btn-floating blue-grey white-text modal-trigger" href="#newchannel-modal"><i class="material-icons">edit</i></a></li>
+    <li><a class="btn-floating blue-grey white-text modal-trigger" href="#newchannelfile-modal"><i class="material-icons">file_upload</i></a></li>
+    <li><a class="btn-floating blue-grey white-text modal-trigger" href="#adduser-modal"><i class="material-icons">person</i></a></li>
+  </ul>
+</div>
+
+<div id="newchannel-modal" class="modal">
+  <form method="post" action="/channel">
+    <div class="modal-content">
+      <h4>New Group/Channel</h4>
+      <div class="row">
+        <div class="input-field col s6">
+          <input type="text" placeholder="Group" name="group" id="group">
+          <label for="group">Group</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" placeholder="channel" name="channel" id="channel">
+          <label for="channel">Channel</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Add">
+      <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+    </div>
+  </form>
+</div>
+
+<div id="adduser-modal" class="modal">
+  <form method="post" action="/channel/user">
+    <div class="modal-content">
+      <h4>New Group/Channel</h4>
+      <div class="row">
+        <div class="input-field col s6">
+          <input type="text" placeholder="Group" name="group" id="group">
+          <label for="group">Group</label>
+        </div>
+        <div class="input-field col s6">
+          <input type="text" placeholder="Channel" name="channel" id="channel">
+          <label for="channel">Channel</label>
+        </div>
+      </div>
+      <div class="row">
+        <div class="input-field col s12">
+          <input type="text" placeholder="User ID" name="userid" id="userid">
+          <label for="userid">User ID</label>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Add">
+      <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+    </div>
+  </form>
+</div>

@@ -1,12 +1,17 @@
 var express = require("express");
 var bodyParser = require("body-parser");
 var cors = require("cors");
+var expresshbs = require("express-handlebars");
+var session = require("express-session");
 
+var async = require("async");
 var basicauth = require("basic-auth");
 var bcrypt = require("bcrypt");
 var crypto = require("crypto");
 var salt_rounds = 10;
 var uniqid = require("uniqid");
+
+var ALPHANUMERIC = 'ABCEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
 
 var colors = require("colors");
 
@@ -94,6 +99,30 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
 
+var handlebars = expresshbs.create({
+  defaultLayout : 'main',
+  helpers : {
+    uniqid : () => {
+      return uniqid();
+    },
+    isMale : (gender) => {
+      return gender == 'm' || gender == 'M';
+    },
+    isFemale : (gender) => {
+      return gender == 'f' || gender == 'F';
+    }
+  }
+});
+app.engine('handlebars', handlebars.engine);
+app.set('view engine', 'handlebars');
+
+app.use(session({
+  secret : crypto.createHmac('sha256', uniqid()).update(uniqid()).digest('hex'),
+  cookie : { maxAge : 1000 * 60 * 60 * 24},
+  resave : false,
+  saveUninitialized : false
+}));
+
 var getAuth = function(req, res, next){
   var user = basicauth(req);
   if(user){
@@ -108,209 +137,248 @@ var getAuth = function(req, res, next){
   }
 }
 
-/**
- * @api {get} / Ping API
- * @apiName Ping
- * @apiDescription Simple ping to make sure the service is up and running.
- * @apiGroup General
- *
- * @apiSuccess {String} message Received at Admin API
- */
+var auth = (req, res, next) => {
+  if(req.session){
+    next();
+  }else{
+    res.redirect('/login');
+  }
+};
+
+app.use(express.static(__dirname + "/assets"));
+app.use((req, res, next) => {
+  res.data = {};
+  next();
+});
+
 app.get("/", function(req, res){
-  res.status(200).json({
-    message : "Received at Admin API"
-  });
+  res.redirect(req.session.username ? '/clients' : '/login');
 });
 
-app.get('/user/:id', function(req, res){
-  users.get(req.params.id, function(get_err, user){
-    if(get_err){
-      res.status(500).json({
-        message : get_err.message
-      });
-    }else{
-      res.status(200).json({
-        message : "Success",
-        user : {
-          name : user.name,
-          username : user.username,
-          email : user.email,
-          dob : user.dob,
-          gender : user.gender
-        }
-      });
-    }
-  });
+app.get('/login', function(req, res){
+  res.render('login');
 });
 
-/**
- * @api {post} /user Post new user
- * @apiName New user
- * @apiDescription Adds a new user to the database.
- * @apiGroup User
- *
- * @apiParam {String} id User's unique id
- * @apiParam {String} dob User's DOB, formatted in JS Date style
- * @apiParam {String} name User's name
- * @apiParam {String} email User's email
- * @apiParam {String} gender Single character indicating user's gender (m or f)
- * @apiParam {String} password User's password
- *
- * @apiSuccess {String} message Success!
- * @apiSuccess {json} user Object defining user
- *
- * @apiError Missing <foo> field A certain field is not filled in.
- *
- * @apiError ErrorHashingPassword Self-explanatory
- */
-app.options("/user", cors());
-app.post("/user", getAuth, function(req, res){
-  if(!req.body.id){
-    res.status(400).json({
-      message : "Missing id field"
-    });
-  }else if(!req.body.name){
-    res.status(400).json({
-      message : "Missing name field"
-    });
-  }else if(!req.body.username){
-    res.status(400).json({
-      message : "Missing username field"
-    });
-  }else if(!req.body.email){
-    res.status(400).json({
-      message : "Missing email field"
-    });
+app.post("/login", function(req, res){
+  if(!req.body.username){
+    res.data.message = "Missing username";
+    res.render('login', res.data);
   }else if(!req.body.password){
-    res.status(400).json({
-      message : "Missing password field"
+    res.data.message = "Missing password";
+    res.render('login', res.data);
+  }else{
+    nano.auth(req.body.username, req.body.password, (auth_err, auth_body, auth_headers) => {
+      if(auth_err){
+        console.log(auth_err);
+        res.data.message = auth_err.reason;
+        res.render('login', res.data);
+      }else{
+        req.session.username = req.body.username;
+        req.session.password = req.body.password;
+        res.redirect('/');
+      }
     });
-  }else if(!req.body.gender){
-    res.status(400).json({
-      message : "Missing gender field"
+  }
+});
+
+app.get('/logout', function(req, res){
+  req.session.destroy((err) => {
+    res.redirect('/');
+  });
+});
+
+app.get('/clients', auth, function(req, res){
+  if(req.session.success){
+    res.data.success = req.session.success;
+    delete req.session.success;
+  }
+  if(req.session.client_id){
+    res.data.client_id = req.session.client_id;
+    delete req.session.client_id;
+  }
+  if(req.session.client_secret){
+    res.data.client_secret = req.session.client_secret;
+    delete req.session.client_secret;
+  }
+  if(req.session.error){
+    res.data.error = req.session.error;
+    delete req.session.error;
+  }
+  res.data.clients = [];
+  clients.list({
+    include_docs : true
+  }, (list_err, body) => {
+    async.each(body.rows, (row, cb) => {
+      res.data.clients.push({
+        id : row.doc._id,
+        name : row.doc.name,
+        secret : row.doc.secret,
+        redirect_uris : row.doc.redirect_uris
+      });
+      cb();
+    }, () => {
+      res.render('clients', res.data);
     });
-  }else if(!req.body.dob){
-    res.status(400).json({
-      message : "Missing dob field"
+  });
+});
+
+app.post("/client", auth, function(req, res){
+  if(req.body.id){
+    var redirect_uris = [];
+    async.each(Object.keys(req.body), (key, cb) => {
+      if(key.split('-')[1] == 'uri')
+        redirect_uris.push(req.body[key]);
+      cb();
+    }, () => {
+      clients.get(req.body.id, (g_err, client) => {
+        clients.insert({
+          _rev : client._rev,
+          name : req.body.name,
+          secret : client.secret,
+          redirect_uris : redirect_uris
+        }, req.body.id, (err, body) => {
+          if(err){
+            req.session.error = err.reason;
+            res.redirect('/clients');
+          }else{
+            req.session.success = "Success!";
+            res.redirect('/clients');
+          }
+        });
+      });
     });
   }else{
-    bcrypt.hash(req.body.password, salt_rounds, function(hash_err, hash){
-      if(hash_err){
-        res.status(500).json({
-          message : "Error hashing password",
-          data : hash_err
-        });
+    clients.insert({
+      name : req.body.name,
+      secret : crypto.createHmac('sha256', uniqid()).update(uniqid()).digest('hex'),
+      redirect_uris : req.body.redirect_uri
+    }, uniqid(), (err, body) => {
+      if(err){
+        req.session.error = err.reason;
+        res.redirect('/clients');
       }else{
-        var user = {
-          dob : req.body.dob,
-          name : req.body.name,
-          username : req.body.username,
-          email : req.body.email,
-          gender : req.body.gender,
-          password : hash
-        };
-        nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984"
-        users.insert(user, req.body.id, function(err, body){
-          nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984"
-          if(err){
-            res.status(500).json({
-              message : err.message,
-              data : err
-            });
-          }else{
-            users.get(body.id, function(uerr, user){
-              cache.hget('usernames', user.name.toUpperCase(), function(cache_err, val){
-                if(val){
-                  if(!val.includes(user._id))
-                    cache.hset('usernames', user.name.toUpperCase(), val + user._id + '+', redis.print);
-                }else{
-                  cache.hset('usernames', user.name.toUpperCase(), user._id + '+', redis.print);
-                }
-              });
-              res.status(200).json({
-                message : "Success!",
-                user : user
-              });
-            });
-          }
+        clients.get(body.id, (g_err, client) => {
+          req.session.success = "Success!";
+          req.session.client_id = client._id;
+          req.session.client_secret = client.secret;
+          res.redirect('/clients');
         });
       }
     });
   }
 });
 
-app.options("/user/:id", cors());
-app.post("/user/:id", getAuth, function(req, res){
-  users.get(req.params.id, function(get_err, user){
+app.get('/users', auth, function(req, res){
+  if(req.session.success){
+    res.data.success = req.session.success;
+    delete req.session.success;
+  }
+  if(req.session.error){
+    res.data.error = req.session.error;
+    delete req.session.error;
+  }
+  if(req.session.user){
+    res.data.user = req.session.user;
+    delete req.session.user;
+  }
+  res.render('users', res.data);
+});
+
+app.get('/user', auth, function(req, res){
+  users.get(req.query.id, (get_err, user) => {
     if(get_err){
-      res.status(500).json({
-        message : get_err.message
-      });
-    }else{
-      var user_data = {
-        dob : req.body.dob,
-        name : req.body.name,
-        email : req.body.email,
-        gender : req.body.gender
-      };
-      if(!user_data.dob)
-        user_data.dob = user.dob;
-      if(!user_data.name)
-        user_data.name = user.name;
-      if(!user_data.email)
-        user_data.email = user.email;
-      if(!user_data.gender)
-        user_data.gender = user.gender;
-      if(req.body.password){
-        user_data.password = bcrypt.hashSync(req.body.password, 10);
+      if(get_err.statusCode == 404){
+        req.session.error = req.query.id + " not found";
       }else{
-        user_data.password = user.password;
+        req.session.error = get_err.reason;
       }
-      user_data._rev = user._rev;
-      cache.hget('usernames', row.doc.name.toUpperCase(), function(cache_err, val){
-        if(val){
-          if(!val.includes(row.id))
-            cache.hset('usernames', row.doc.name.toUpperCase(), val + row.id + '+', redis.print);
-        }else{
-          cache.hset('usernames', row.doc.name.toUpperCase(), row.id + '+', redis.print);
-        }
-      });
-      cache.hget('usernames', row.doc.username.toUpperCase(), function(cache_err, val){
-        if(val){
-          if(!val.includes(row.id))
-            cache.hset('usernames', row.doc.username.toUpperCase(), val + row.id + '+', redis.print);
-        }else{
-          cache.hset('usernames', row.doc.username.toUpperCase(), row.id + '+', redis.print);
-        }
-      });
-      nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
-      users.insert(user_data, req.params.id, function(ins_err, body){
-        nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984"
-        if(ins_err){
-          res.status(500).json({
-            message : ins_err.message
-          });
-        }else{
-          res.status(200).json({
-            message : "Success!"
-          });
-        }
-      });
+    }else{
+      req.session.user = {
+        id : user._id,
+        name : user.name,
+        username : user.username,
+        email : user.email,
+        dob : user.dob,
+        gender : user.gender
+      };
     }
+    res.redirect('/users');
   });
 });
 
-/**
- * @api {delete} /user/:id Delete a user
- * @apiName Delete user
- * @apiDescription Deletes a specified user from the database.
- * @apiGroup User
- *
- * @apiParam {String} id User's unique id
- *
- * @apiSuccess {String} message Success!
- */
-app.options("/user/:id", cors());
+app.post("/user", auth, function(req, res){
+  if(!req.body.id){
+    req.session.error = "ID not found";
+    res.redirect("/users");
+  }else{
+    users.get(req.body.id, (get_err, user) => {
+      if(get_err){
+        if(get_err.statusCode != 404){
+          req.session.error = get_err.reason;
+          res.redirect("/users");
+        }else{
+          user = {};
+          if(!req.body.name){
+            req.session.error = "Missing name field";
+            res.redirect("/users");
+          }else if(!req.body.username){
+            req.session.error = "Missing username field";
+            res.redirect("/users");
+          }else if(!req.body.email){
+            req.session.error = "Missing email field";
+            res.redirect("/users");
+          }else if(!req.body.password && !req.body.autogenpass){
+            req.session.error = "Missing password field";
+            res.redirect("/users");
+          }else if(!req.body.gender){
+            req.session.error = "Missing gender field";
+            res.redirect("/users");
+          }else if(!req.body.dob){
+            req.session.error = "Missing D.O.B. field";
+            res.redirect("/users");
+          }else{
+            if(req.body.autogenpass){
+              req.body.password = "";
+              for(var i = 0; i < 8; i++)
+                req.body.password += ALPHANUMERIC.charAt(Math.floor(Math.random() * ALPHANUMERIC.length));
+            }
+            user.password = bcrypt.hashSync(req.body.password, salt_rounds);
+          }
+        }
+      }
+      if(req.body.name)
+        user.name = req.body.name;
+      if(req.body.username)
+        user.username = req.body.username;
+      if(req.body.email)
+        user.email = req.body.email;
+      if(req.body.gender)
+        user.gender = req.body.gender;
+      if(req.body.dob)
+        user.dob = new Date(req.body.dob);
+      var userid = user._id || req.body.id;
+      if(user._id)
+        delete user._id;
+      users.insert(user, userid, (ins_err, ins_body) => {
+        if(ins_err){
+          res.session.error = ins_err.reason;
+          res.redirect("/users");
+        }else{
+          cache.hget('usernames', user.name.toUpperCase(), (cache_err, val) => {
+            cache.hset('usernames', user.name.toUpperCase(), (val && !val.includes(userid)) ? val + userid + '+' : userid + '+');
+          });
+          user_cache.hset(userid, "_exists", 1);
+
+          req.session.success = "Success!";
+          if(req.body.autogenpass)
+            req.session.success += " Autogenned password is " + req.body.password;
+          res.redirect("/user?id=" + userid);
+        }
+      });
+    });
+  }
+});
+
 app.delete("/user/:id", getAuth, function(req, res){
   users.get(req.params.id, function(get_err, user){
     if(get_err){
@@ -335,154 +403,152 @@ app.delete("/user/:id", getAuth, function(req, res){
   });
 });
 
-/**
- * @api {post} /client Post new client
- * @apiName New client
- * @apiDescription Adds a new client to the database.
- * @apiGroup Client
- *
- * @apiParam {String} name Name of the client (for display in login screen)
- * @apiParam {Array} redirect_uri Array of client-submitted redirect uris
- *
- * @apiSuccess {String} message Success!
- * @apiSuccess {json} client Client object data
- *
- * @apiError err The service encountered some error with the database, more appended in the err field
- */
-app.post("/client", getAuth, function(req, res){
-  var client = {
-    name : req.body.name,
-    secret : crypto.createHmac('sha256', uniqid()).update(uniqid()).digest('hex'),
-    redirect_uris : req.body.redirect_uri
-  };
-  nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
-  clients.insert(client, uniqid(), function(err, body){
-    nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984";
-    if(err){
-      res.status(500).json({
-        message : err.message
-      });
-    }else{
-      clients.get(body.id, function(g_err, client){
-        res.status(200).json({
-          message : "Success!",
-          client : client
+app.get("/channels", auth, function(req, res){
+  if(req.session.success){
+    res.data.success = req.session.success;
+    delete req.session.success;
+  }
+  if(req.session.error){
+    res.data.error = req.session.error;
+    delete req.session.error;
+  }
+  var gcs_tmp = {};
+  channels.list({
+    include_docs : true
+  }, (list_err, body) => {
+    async.each(body.rows, (row, cb) => {
+      if(row.doc._id != '_design/channels')
+        gcs_tmp[row.doc.group] ? gcs_tmp[row.doc.group].push(row.doc.channel) : gcs_tmp[row.doc.group] = [row.doc.channel];
+      cb();
+    }, () => {
+      res.data.gcs = [];
+      async.each(Object.keys(gcs_tmp), (group, cb2) => {
+        res.data.gcs.push({
+          group : group,
+          channels : gcs_tmp[group]
         });
+        cb2();
+      }, () => {
+        res.render('channels', res.data);
       });
-    }
+    });
   });
 });
 
-app.post("/channel", getAuth, function(req, res){
-  if(req.body.channel && req.body.group){
-    nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
-    channels.insert({
-      channel : req.body.channel,
-      group : req.body.group,
-      users : []
-    }, function(err, body){
-      nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984";
-      if(err){
-        res.status(500).json({
-          message: err.message
-        });
+app.post("/channel", auth, function(req, res){
+  if(!req.body.group){
+    req.session.error = "Missing group";
+    res.redirect("/channels");
+  }else if(!req.body.channel){
+    req.session.error = "Missing channel";
+    res.redirect("/channels");
+  }else{
+    cache.exists(req.body.group + '+' + req.body.channel, (exists_err, exists) => {
+      if(exists){
+        req.session.error = "Channel already exists";
+        res.redirect("/channels");
       }else{
-        cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([]));
-        res.status(200).json({
-          message : "Success"
+        channels.insert({
+          group : req.body.group,
+          channel : req.body.channel,
+          users : []
+        }, (ins_err, ins_body) => {
+          if(ins_err){
+            req.session.error = ins_err.reason;
+            res.redirect("/channels");
+          }else{
+            cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([]));
+            req.session.success = 'Success';
+            res.redirect("/channels");
+          }
         });
       }
-    });
-  }else{
-    res.status(400).json({
-      message: "Missing parameter"
     });
   }
 });
 
-app.post("/channel/user",  getAuth, function(req, res){
-  nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984";
-  channels.view('channels', 'by_group_channel', {
-    key : [req.body.group, req.body.channel],
-    include_docs : true
-  }, function(chan_err, channel_docs){
-    if(chan_err){
-      res.status(500).json({
-        message : chan_err.reason
-      });
-    }else{
-      console.log(channel_docs);
-      if(channel_docs.rows[0]){
-        users.get(req.body.user, function(user_err, user){
-          if(user_err){
-            res.status(500).json({
-              message : user_err.message
-            });
-          }else{
-            permissions.bulk({docs : [{
-              user : user._id,
-              action : 'send_message',
-              scope : {group : req.body.group, channel : req.body.channel},
-              value : "1"
-            },{
-              user : user._id,
-              action : 'view_channel',
-              scope : {group : req.body.group, channel : req.body.channel},
-              value : {group : req.body.group, channel : req.body.channel}
-            },{
-              user : user._id,
-              action : 'send_file',
-              scope : {group : req.body.group, channel : req.body.channel},
-              value : "1"
-            },{
-              user : user._id,
-              action : 'add_user',
-              scope : {group : req.body.group, channel : req.body.channel},
-              value : "1"
-            }]}, function(ins_err, body){
-              if(ins_err){
-                res.status(500).json({
-                  message : ins_err.message
-                });
-              }else{
-                user_cache.hexists(req.body.user, req.body.group, (exists_err, group_exists) => {
-                  if(!group_exists){
-                    permissions.insert({
-                      user : req.body.user,
-                      action : 'add_channel',
-                      scope : req.body.group,
-                      value : "1"
-                    }, (ins_channel_err, ins_channel_body) => {
-                      user_cache.hset(req.body.user, req.body.group, 1);
-                    });
-                  }
-                });
-                var channel = channel_docs.rows[0].doc;
-                if(!channel.users.includes(user._id))
-                  channel.users.push(user._id);
-                user_cache.hset(req.body.user, req.body.group + '+' + req.body.channel, 1);
-                channels.insert(channel, function(mod_err, mod_bod){
-                  if(mod_err){
-                    res.send(mod_err)
-                  }else{
-                    res.status(200).json({
-                      message : "Success"
-                    });
-                  }
-                });
-              }
-            });
-          }
-        });
+app.post("/channel/user", auth, function(req, res){
+  if(!req.body.group){
+    req.session.error = "Group not found";
+    res.redirect("/channels");
+  }else if(!req.body.channel){
+    req.session.error = "Channel not found";
+    res.redirect("/channels");
+  }else if(!req.body.userid){
+    req.session.error = "User not found";
+    res.redirect("/channels");
+  }else{
+    channels.view('channels', 'by_group_channel', {
+      key : [req.body.group, req.body.channel],
+      include_docs : true
+    }, (chan_err, channel_docs) => {
+      if(chan_err){
+        req.session.error = chan_err.reason;
+        res.redirect("/channels");
       }else{
-        res.status(404).json({
-          message : "Channel not found"
-        });
+        if(!channel_docs.rows[0]){
+          req.session.error = "Group-Channel not found";
+          res.redirect("/channels");
+        }else{
+          permissions.bulk({docs : [{
+            user : req.body.userid,
+            action : 'send_message',
+            scope : {group : req.body.group, channel : req.body.channel},
+            value : "1"
+          },{
+            user : req.body.userid,
+            action : 'view_channel',
+            scope : {group : req.body.group, channel : req.body.channel},
+            value : {group : req.body.group, channel : req.body.channel}
+          },{
+            user : req.body.userid,
+            action : 'send_file',
+            scope : {group : req.body.group, channel : req.body.channel},
+            value : "1"
+          },{
+            user : req.body.userid,
+            action : 'add_user',
+            scope : {group : req.body.group, channel : req.body.channel},
+            value : "1"
+          }]}, (ins_err, body) => {
+            if(ins_err){
+              req.session.error = ins_err.reason;
+              res.redirect("/channels");
+            }else{
+              user_cache.hexists(req.body.user, req.body.group, (exists_err, group_exists) => {
+                if(!group_exists){
+                  permissions.insert({
+                    user : req.body.userid,
+                    action : 'add_channel',
+                    scope : req.body.group,
+                    value : "1"
+                  }, (ins_channel_err, ins_channel_body) => {
+                    user_cache.hset(req.body.user, req.body.group, 1);
+                  });
+                }
+              });
+              var channel = channel_docs.rows[0].doc;
+              if(!channel.users.includes(req.body.userid))
+                channel.users.push(req.body.userid);
+              user_cache.hset(req.body.user, req.body.group + '+' + req.body.channel, 1);
+              cache.set(req.body.group + '+' + req.body.channel, JSON.stringify(channel.users));
+              channels.insert(channel, (mod_err, mod_bod) => {
+                if(mod_err){
+                  req.session.error = mod_err.reason;
+                  res.redirect("/channels");
+                }else{
+                  req.session.success = "Success!";
+                  res.redirect("/channels");
+                }
+              });
+            }
+          });
+        }
       }
-    }
-  });
+    });
+  }
 });
 
 app.listen(process.env.ADMIN_PORT, function(err){
-  err ? console.error(err) : console.log(("Admin API up at " + process.env.ADMIN_PORT).rainbow);
+  err ? console.error(err) : console.log(("Admin API up at " + process.env.ADMIN_PORT).green);
 });
