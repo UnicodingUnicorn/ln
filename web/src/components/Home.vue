@@ -17,6 +17,10 @@
       <li>
         <div class="user-view">
           <div class="background cyan"></div>
+          <a>
+            <img v-if="user_info.avatar" class="circle" v-bind:src="user_info.avatar">
+            <img v-else="user_info.avatar" class="circle" v-bind:src="default_avatar">
+          </a>
           <a><span class="white-text name">{{user_info.username}}</span></a>
           <a><span class="white-text email">{{user_info.name}}</span></a>
         </div>
@@ -49,6 +53,8 @@
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
+            <img v-if="user_info.avatar" class="circle" v-bind:src="user_info.avatar">
+            <img v-else="user_info.avatar" class="circle" v-bind:src="default_avatar">
             <a v-if="user_info.sub != m2.user" v-on:click="open_pm" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
             <span v-else class="title"><b>{{users[m2.user].username}}</b></span>
             <p v-for="m3 in m2.messages">
@@ -129,7 +135,8 @@
         add_group : '',
         add_channel : '',
         current_messages : [],
-        redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/')
+        redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/'),
+        default_avatar : options.FILES_URL + '/file/default/avatar.png'
       }
     },
     computed : {
