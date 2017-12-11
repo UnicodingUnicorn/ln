@@ -400,12 +400,9 @@
           }else{
             toastr.error("Improper nonce, you may be under attack.");
             Cookies.remove('nonce');
-            Cookies.set('nonce', nonce);
             this.$router.push('/');
           }
         }
-      }else if(!Cookies.get('nonce')){
-        Cookies.set('nonce', nonce);
       }
       if(this.token){
         socket = socketCluster.connect(socket_options);
@@ -425,9 +422,11 @@
           }
         });
       }
-      setTimeout(() => {
-        if(!this.token)
+      setTimeout(() => {        
+        if(!this.token){
+          Cookies.set('nonce', nonce);
           window.location.href = this.redirect_uri;
+        }
       }, 1000);
     }
   }
