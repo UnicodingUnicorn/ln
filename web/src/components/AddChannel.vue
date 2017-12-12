@@ -50,6 +50,7 @@
   });
 
   export default {
+    name : 'AddChannel',
     computed : {
       ...mapGetters({
         token : 'user_token',

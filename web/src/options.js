@@ -10,6 +10,7 @@ export default {
   MESSAGES_URL : "http://" + host + ":10204",
   ACCOUNTS_URL : "http://" + host + ":10206",
   FILES_URL : "http://" + host + ":10207",
+  AVATAR_URL : "http://" + host + ":10207/file/default/avatar.png",
   SOCKETCLUSTER_HOST : host,
   SOCKETCLUSTER_PORT : '10203'
 }

@@ -15,7 +15,7 @@
     </nav>
     <ul v-show="token != undefined" id="slide-out" class="side-nav fixed">
       <li>
-        <div class="user-view">
+        <div class="user-view" v-on:click="showuserprofile(user_info.sub)">
           <div class="background cyan"></div>
           <a>
             <img v-if="user_info.avatar" class="circle" v-bind:src="user_info.avatar">
@@ -55,7 +55,7 @@
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
             <img v-if="user_info.avatar" class="circle" v-bind:src="user_info.avatar">
             <img v-else="user_info.avatar" class="circle" v-bind:src="default_avatar">
-            <a v-if="user_info.sub != m2.user" v-on:click="open_pm" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
+            <a v-if="user_info.sub != m2.user" v-on:click="showuserprofile(m2.user)" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
             <span v-else class="title"><b>{{users[m2.user].username}}</b></span>
             <p v-for="m3 in m2.messages">
               <span v-if="m2.type == 'm'">{{m3}}</span>
@@ -97,6 +97,7 @@
     </div>
     <AddUser id="adduser-modal" class="modal" v-bind:group="add_group" v-bind:channel="add_channel" v-on:adduser="added_user"/>
     <AddChannel id="addchannel-modal" class="modal" v-bind:group="add_group" v-on:addchannel="added_channel" />
+    <UserProfile id="profile-modal" class="modal" v-bind:userid="profile_user" v-on:openpm="open_pm" />
     <div class="valign-wrapper center-align" v-show="token == undefined">
         <p>Redirecting to login... If you are not redirected, please go <a v-bind:href="redirect_uri">here.</a></p>
     </div>
@@ -116,6 +117,7 @@
 
   import AddUser from './AddUser.vue'
   import AddChannel from './AddChannel.vue'
+  import UserProfile from './UserProfile.vue'
 
   var nonce = crypto.randomBytes(32).toString('base64').slice(0, 32).replace(/\+/g, '0').replace(/\//g, '0');
   var socket = null;
@@ -126,7 +128,8 @@
   };
 
   export default {
-    components : { AddUser, AddChannel },
+    name : 'Home',
+    components : { AddUser, AddChannel, UserProfile },
     data : function(){
       return {
         group : '',
@@ -134,9 +137,10 @@
         message : '',
         add_group : '',
         add_channel : '',
+        profile_user : '',
         current_messages : [],
         redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/'),
-        default_avatar : options.FILES_URL + '/file/default/avatar.png'
+        default_avatar : options.AVATAR_URL
       }
     },
     computed : {
@@ -352,9 +356,13 @@
         $('#chatView').scrollTop = $('#chatView').scrollHeight;
         $('.materialboxed').materialbox();
       },
-      open_pm : function(event){
-        this.changeGC('pm', event.target.id);
-        this.$store.dispatch('add_pm_channel', event.target.id);
+      showuserprofile : function(user){
+        this.profile_user = user;
+        $('#profile-modal').modal('open');
+      },
+      open_pm : function(userid){
+        this.changeGC('pm', userid);
+        this.$store.dispatch('add_pm_channel', userid);
       },
       showadduser : function(addgroup, addchannel){
         this.add_group = addgroup;
@@ -405,6 +413,7 @@
         }
       }
       if(this.token){
+        //Connect to socketcluster
         socket = socketCluster.connect(socket_options);
         socket.on('connect', (status) => {
           if(status.isAuthenticated){
@@ -422,7 +431,7 @@
           }
         });
       }
-      setTimeout(() => {        
+      setTimeout(() => {
         if(!this.token){
           Cookies.set('nonce', nonce);
           window.location.href = this.redirect_uri;

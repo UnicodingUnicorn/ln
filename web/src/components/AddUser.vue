@@ -43,6 +43,7 @@
   });
 
   export default {
+    name : 'AddUser',
     computed : {
       ...mapGetters({
         token : 'user_token'
