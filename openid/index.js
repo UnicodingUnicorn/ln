@@ -2,20 +2,26 @@ var express = require("express");
 var bodyParser = require("body-parser");
 var expresshbs = require("express-handlebars");
 var cors = require("cors");
+var expressBrute = require("express-brute");
+var BruteRedis = require("express-brute-redis");
 
 var async = require("async");
 var basicauth = require("basic-auth");
 var bcrypt = require("bcrypt");
 var bearerToken = require("bearer-token");
-var colors = require("colors");
+var colours = require("colors");
 var jwt = require("jsonwebtoken");
 var querystring = require("querystring");
 var request = require("request");
 var uniqid = require("uniqid");
 var url = require("url");
 
-var Memcached = require("memcached");
-var memcached = new Memcached('memcached:11211')
+var redis = require("redis");
+var openidCache = redis.createClient({
+  host : 'redis',
+  port : 6379,
+  db : 2
+});
 
 var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
 var creator = require("couchdb-creator");
@@ -36,6 +42,13 @@ creator(nano, 'users', {name : 'email', doc : users_design}, function(db){
 var clients;
 creator(nano, 'clients', function(db){
   clients = db;
+  clients.list({
+    include_docs : true
+  }, (err, body) => {
+    async.each(body.rows, (row, cb) => {
+      openidCache.set(row.doc._id, row.doc.secret, cb);
+    }, () => {});
+  });
 });
 
 var iss = process.env.ISS;
@@ -43,9 +56,13 @@ var iss = process.env.ISS;
 //TODO: SSL
 var app = express();
 
-// app.use(bodyParser.json());
-// app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
+
+var store = new BruteRedis({
+  client : openidCache,
+  prefix : 'bp:'
+});
+var bruteforce = new expressBrute(store);
 
 app.use(express.static(__dirname + "/assets"));
 
@@ -144,8 +161,7 @@ app.all('/authorise', bodyParser.json(), bodyParser.urlencoded({extended : true}
   }
 });
 
-app.post("/authcode", bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
-  //TODO:Implement rate limiting
+app.post("/authcode", bruteforce.prevent, bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   res.data = {
     redirect_uri : req.body.redirect_uri,
     state : req.body.state,
@@ -171,7 +187,7 @@ app.post("/authcode", bodyParser.json(), bodyParser.urlencoded({extended : true}
             scopes : req.body.scopes
           };
           var code = uniqid();
-          memcached.set('ac:' + code, JSON.stringify(raw_code), 60, function(err){
+          openidCache.set('ac:' + code, JSON.stringify(raw_code), 'EX', 60, function(err){
             if(!(req.body.redirect_uri.match(/(http:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(http:\/\/)(\w|\W)+/) || req.body.redirect_uri.match(/(https:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(https:\/\/)(\w|\W)+/)))
               req.body.redirect_uri = "http://" + req.body.redirect_uri;
             if(req.body.redirect_uri[req.body.redirect_uri.length - 1] == '/')
@@ -193,8 +209,7 @@ app.post("/authcode", bodyParser.json(), bodyParser.urlencoded({extended : true}
   });
 });
 
-app.post("/implicit", bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
-  //TODO:Implement rate limiting
+app.post("/implicit", bruteforce.prevent, bodyParser.json(), bodyParser.urlencoded({extended : true}), function(req, res){
   res.data = {
     redirect_uri : req.body.redirect_uri,
     state : req.body.state,
@@ -229,19 +244,19 @@ app.post("/implicit", bodyParser.json(), bodyParser.urlencoded({extended : true}
           };
 
           var access_token = uniqid();
-          memcached.set('id:' + access_token, jwt.sign({
+          openidCache.set('id:' + access_token, jwt.sign({
             sub : user._id,
             scopes : req.body.scopes
-          }, access_token), 60, function(err){
+          }, access_token), 'EX', 60, function(err){
             if(!(req.body.redirect_uri.match(/(http:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(http:\/\/)(\w|\W)+/) || req.body.redirect_uri.match(/(https:\/\/)(\w|\W)+/) || decodeURI(req.body.redirect_uri).match(/(https:\/\/)(\w|\W)+/)))
               req.body.redirect_uri = "http://" + req.body.redirect_uri;
             if(req.body.redirect_uri[req.body.redirect_uri.length - 1] == '/')
               req.body.redirect_uri = req.body.redirect_uri.substring(0, req.body.redirect_uri.length);
-            clients.get(req.body.client_id, function(cg_err, client){
+            openidCache.get(req.body.client_id, function(cg_err, client_secret){
               res.render('redirect', {redirect_url : req.body.redirect_uri + '?' + querystring.stringify({
                 state : req.body.state,
                 access_token : access_token,
-                id_token : jwt.sign(id_token, client.secret),
+                id_token : jwt.sign(id_token, client_secret),
                 token_type : "Bearer",
                 expires_in : 10 * 60 * 1000,
                 nonce : req.body.nonce
@@ -278,8 +293,8 @@ app.post("/token", bodyParser.json(), bodyParser.urlencoded({extended : true}), 
         }, function(err){
           if(redirect_uri){
             if(req.body.grant_type == 'authorization_code' || req.body.grant_type == 'authorisation_code'){
-              memcached.get('ac:' + req.body.code, function(r_err, code_body){
-                memcached.del('ac:' + req.body.code, function(del_err){
+              openidCache.get('ac:' + req.body.code, function(r_err, code_body){
+                openidCache.del('ac:' + req.body.code, function(del_err){
                   if(code_body != undefined){
                     res.set({
                       'Cache-Control' : 'no-store',
@@ -298,10 +313,10 @@ app.post("/token", bodyParser.json(), bodyParser.urlencoded({extended : true}), 
                     };
 
                     var access_token = uniqid();
-                    memcached.set('id:' + access_token, jwt.sign({
+                    openidCache.set('id:' + access_token, jwt.sign({
                       sub : code_body.user._id,
                       scopes : code_body.scopes
-                    }, access_token), 60, function(set_iderr){
+                    }, access_token), 'EX', 60, function(set_iderr){
                       res.status(200).json({
                         id_token : jwt.sign(id_token, client.secret),
                         token_type : "Bearer",
@@ -350,7 +365,7 @@ app.get("/userinfo", bodyParser.json(), bodyParser.urlencoded({extended : true})
         error_description : "Invalid Bearer Auth"
       });
     }else{
-      memcached.get('id:' + token, function(m_err, id_token){
+      openidCache.get('id:' + token, function(m_err, id_token){
         if(m_err){
           res.status(401).json({
             error : "invalid_token",
@@ -396,12 +411,12 @@ app.all('/verify/:token/:target_url', function(req, res){
   if(req.params.target_url){
     var auth = basicauth(req);
     if(auth){
-      clients.get(auth.name, function(get_err, client){
-        if(get_err){
+      openidCache.get(auth.name, function(get_err, client_secret){
+        if(!client_secret){
           res.status(403).send("Forbidden");
         }else{
-          if(client.secret === auth.pass){
-            jwt.verify(req.params.token, client.secret, function(ver_err, decoded){
+          if(client_secret === auth.pass){
+            jwt.verify(req.params.token, client_secret, function(ver_err, decoded){
               if(ver_err){
                 res.status(403).send("Forbidden");
               }else{
@@ -425,5 +440,5 @@ app.all('/verify/:token/:target_url', function(req, res){
 });
 
 app.listen(process.env.OPENID_PORT, function(err){
-  err ? console.error(err) : console.log(("OpenID service up at " + process.env.OPENID_PORT).rainbow);
+  err ? console.error(err) : console.log(("OpenID service up at " + process.env.OPENID_PORT).green);
 });

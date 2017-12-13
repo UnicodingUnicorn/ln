@@ -18,10 +18,12 @@
     "cors": "^2.8.4",
     "couchdb-creator": "^1.0.3",
     "express": "^4.15.3",
+    "express-brute": "^1.0.1",
+    "express-brute-redis": "0.0.1",
     "express-handlebars": "^3.0.0",
     "jsonwebtoken": "^7.4.1",
-    "memcached": "^2.2.2",
     "nano": "^6.4.0",
+    "redis": "^2.8.0",
     "uniqid": "^4.1.1"
   }
 }

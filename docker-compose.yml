@@ -9,10 +9,6 @@ services:
       - "5984:5984" #Open temporarily for debugging
     networks:
       - couchnet
-  memcached:
-    image: memcached
-    networks:
-      - memnet
   minio:
     image: minio/minio:latest
     ports:
@@ -57,10 +53,10 @@ services:
       - "10202:10202"
     depends_on:
       - couchdb
-      - memcached
+      - redis
     networks:
       - couchnet
-      - memnet
+      - redisnet
   # web:
   #   image: httpd
   #   volumes:
@@ -142,6 +138,5 @@ services:
       - couchnet
 networks:
   couchnet:
-  memnet:
   minionet:
   redisnet:
