@@ -72,6 +72,17 @@ const actions = {
         });
       });
     });
+  },
+  refresh_user({commit, state}, userid){
+    return new Promise((resolve) => {
+      user_api.get_user(userid, (user) => {
+        commit(types.ADD_USER, {
+          id : userid,
+          user : user
+        });
+        resolve();
+      });
+    });
   }
 }
 

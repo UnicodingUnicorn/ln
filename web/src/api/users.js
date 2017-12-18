@@ -41,6 +41,17 @@ export default{
         toastr.error(res.body.message);
     });
   },
+  update_user(user_data, token, cb){
+    Vue.http.post(auth.withAuth(token, options.ACCOUNTS_URL + '/user'), user_data, {
+      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+      responseType : 'json'
+    }).then(
+      (res) => {
+        cb();
+      }, (res) => {
+        toastr.error(res.body.message);
+    });
+  },
   search_name(name, cb){
     Vue.http.get(options.ACCOUNTS_URL + '/user?name=' + encodeURIComponent(name), {
       responseType : 'json'

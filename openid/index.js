@@ -391,6 +391,7 @@ app.get("/userinfo", bodyParser.json(), bodyParser.urlencoded({extended : true})
                       return_data.username = user.username;
                       return_data.gender = user.gender;
                       return_data.birthdate = user.dob;
+                      return_data.avatar = user.avatar;
                     }else if(scopes[i] == "email"){
                       return_data.email = user.email;
                     }

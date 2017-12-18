@@ -128,6 +128,60 @@ The gc specified in channel could not be found.
 
 ---
 
+### Update a user's information
+
+```
+POST /user
+```
+
+Update certain mutable aspects of a user's profile (username and avatar). Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+
+#### Headers
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| User | String | User ID passed from the *openid* service. |
+
+#### Body
+
+All fields are optional, if not present, the associated value is simply not updated.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| username | String | Username of the user. |
+
+#### Success 200
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | Success |
+
+#### Error 400
+
+The query is missing the user from an improper auth attempt.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | User not found |
+
+#### Error 404
+
+The user specified in the header cannot be found.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | User not found |
+
+#### Error 500
+
+The database has encountered some form of error.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | Error message pertaining to the error involved. |
+
+---
+
 ### Get all usernames
 
 ```

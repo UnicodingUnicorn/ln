@@ -1,6 +1,7 @@
 import user from '../../api/users'
 import * as types from '../mutation-types'
 
+import async from 'async'
 import Cookies from 'js-cookie'
 
 const state = {
@@ -31,6 +32,21 @@ const actions = {
     user.get_userinfo(login_data.access_token, function(userinfo){
       Cookies.set('user_info', JSON.stringify(userinfo), {expires : 1});
       commit(types.UPDATE_USERINFO, userinfo);
+    });
+  },
+  update_user({commit, state}, data){
+    return new Promise((resolve) => {
+      var userinfo = state.user_info;
+      async.each(Object.keys(data), (key, cb) => {
+        userinfo[key] = data[key];
+        cb();
+      }, () => {
+        user.update_user(data, data.token, () => {
+          Cookies.set('user_info', JSON.stringify(userinfo), {expires : 1});
+          commit(types.UPDATE_USERINFO, userinfo);
+          resolve();
+        });
+      });
     });
   }
 }

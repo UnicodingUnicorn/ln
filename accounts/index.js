@@ -152,7 +152,8 @@ app.get("/user", function(req, res){
             username : user.username,
             email : user.email,
             dob : user.dob,
-            gender : user.gender
+            gender : user.gender,
+            avatar : user.avatar
           }
         });
       }
@@ -178,6 +179,63 @@ app.get("/user", function(req, res){
           ids : return_data
         });
       });
+    });
+  }
+});
+
+app.post("/user", function(req, res){
+  if(!req.get("User")){
+    res.status(400).json({
+      message : 'User not found'
+    });
+  }else{
+    users.get(req.get("User"), (get_err, user) => {
+      if(get_err){
+        if(get_err.statusCode == 404){
+          res.status(404).json({
+            message : 'User not found'
+          });
+        }else{
+          res.status(500).json({
+            message : 'Internal database error'
+          });
+        }
+      }else{
+        if(req.body.username && user.username != req.body.username){ //Don't waste time changing the same
+          var old_username = user.username;
+          cache.hget("usernames", old_username.toUpperCase(), (cache_err, user_ids) => {
+            user_ids = user_ids.split('+');
+            var new_ids = "";
+            async.each(user_ids, (user_id, cb) => {
+              if(user_id != user._id && user_id != "")
+                new_ids += user_id + "+";
+              cb();
+            }, () => {
+              if(new_ids == ""){
+                cache.hdel("usernames", old_username.toUpperCase());
+              }else{
+                cache.hset("usernames", old_username.toUpperCase(), new_ids);
+              }
+            });
+          });
+          user.username = req.body.username;
+          cache.hget("usernames", req.body.username.toUpperCase(), (cache_err, user_ids) => {
+            if(!user_ids){
+              user_ids = user._id + '+';
+            }else if(!user_ids.split('+').includes(user._id)){
+              user_ids += user._id + '+';
+            }
+            cache.hset("usernames", req.body.username.toUpperCase(), user_ids);
+          });
+        }
+        if(req.body.avatar)
+          user.avatar = req.body.avatar;
+        users.insert(user, (mod_err, mod_body) => {
+          res.status(200).json({
+            message : 'Success'
+          });
+        });
+      }
     });
   }
 });
@@ -211,7 +269,8 @@ app.get('/users', function(req, res){
                   username : indiv_user.username,
                   email : indiv_user.email,
                   dob : indiv_user.dob,
-                  gender : indiv_user.gender
+                  gender : indiv_user.gender,
+                  avatar : indiv_user.avatar
                 };
                 cb();
               }

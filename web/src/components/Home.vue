@@ -15,7 +15,7 @@
     </nav>
     <ul v-show="token != undefined" id="slide-out" class="side-nav fixed">
       <li>
-        <div class="user-view" v-on:click="showuserprofile(user_info.sub)">
+        <div class="user-view clickable" v-on:click="showuserprofile(user_info.sub)">
           <div class="background cyan"></div>
           <a>
             <img v-if="user_info.avatar" class="circle" v-bind:src="user_info.avatar">
@@ -26,9 +26,9 @@
         </div>
       </li>
       <div v-for="gc in channels" v-if="gc.group != 'pm'">
-        <li><a><a class="subheader">{{gc.group}}</a><i class="material-icons" style="cursor:pointer;" v-on:click="showaddchannel(gc.group)">add</i></a></li>
+        <li><a><a class="subheader">{{gc.group}}</a><i class="material-icons clickable" v-on:click="showaddchannel(gc.group)">add</i></a></li>
         <li v-for="channel in gc.channels">
-          <a><a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a><i class="material-icons" style="cursor:pointer;" v-on:click="showadduser(gc.group, channel)">add</i></a>
+          <a><a class="waves-effect" v-on:click="changeGC(gc.group, channel)">{{channel}}</a><i class="material-icons clickable" v-on:click="showadduser(gc.group, channel)">add</i></a>
         </li>
       </div>
       <div v-if="pms.length > 0">
@@ -53,8 +53,8 @@
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
           <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
           <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
-            <img v-if="user_info.avatar" class="circle" v-bind:src="user_info.avatar">
-            <img v-else="user_info.avatar" class="circle" v-bind:src="default_avatar">
+            <img v-if="users[m2.user].avatar" class="circle" v-bind:src="users[m2.user].avatar">
+            <img v-else class="circle" v-bind:src="default_avatar">
             <a v-if="user_info.sub != m2.user" v-on:click="showuserprofile(m2.user)" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
             <span v-else class="title"><b>{{users[m2.user].username}}</b></span>
             <p v-for="m3 in m2.messages">
@@ -97,7 +97,7 @@
     </div>
     <AddUser id="adduser-modal" class="modal" v-bind:group="add_group" v-bind:channel="add_channel" v-on:adduser="added_user"/>
     <AddChannel id="addchannel-modal" class="modal" v-bind:group="add_group" v-on:addchannel="added_channel" />
-    <UserProfile id="profile-modal" class="modal" v-bind:userid="profile_user" v-on:openpm="open_pm" />
+    <UserProfile id="profile-modal" class="modal" v-bind:userid="profile_user" v-on:openpm="open_pm" v-on:updated_user="updated_user"/>
     <div class="valign-wrapper center-align" v-show="token == undefined">
         <p>Redirecting to login... If you are not redirected, please go <a v-bind:href="redirect_uri">here.</a></p>
     </div>
@@ -292,7 +292,6 @@
           //Subscribe to updates channel
           socket.subscribe('update:' + this.user_info.sub, {waitForAuth : true}).watch((data) => {
             if(data.action == 'refresh_channels'){ //Refresh channels
-              console.log('Updating');
               this.channels.forEach((gc) => {
                 gc.channels.forEach((channel) => {
                   socket.unsubscribe('chat:' + gc.group + '+' + channel);
@@ -323,8 +322,11 @@
                 });
               });
             }else if(data.action == 'refresh_users'){ //Refresh users
-              console.log('Refreshing users');
               this.$store.dispatch('refresh_channel_users', {gc : data.scope, token : this.token});
+            }else if(data.action == 'refresh_user'){ //Refresh specific user defined in scope
+              this.$store.dispatch('refresh_user', data.scope).then(() => {
+                this.$forceUpdate();
+              });
             }
           });
         });
@@ -387,6 +389,14 @@
             if(err) console.log(err);
             cb();
           });
+        }, () => {});
+      },
+      updated_user : function(){
+        async.each(Object.keys(this.users), (userid, cb) => {
+          socket.publish('update:' + userid, {action : "refresh_user", scope : this.user_info.sub}, (err) => {
+            if(err) console.log(err);
+          });
+          cb();
         }, () => {});
       }
     },
@@ -457,5 +467,8 @@
     position : fixed;
     bottom : 0;
     width : 100%;
+  }
+  .clickable {
+    cursor : pointer;
   }
 </style>
