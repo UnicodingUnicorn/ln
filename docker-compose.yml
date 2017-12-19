@@ -121,8 +121,10 @@ services:
       - "10207:10207"
     depends_on:
       - minio
+      - redis
     networks:
       - minionet
+      - redisnet
   permissions:
     build: ./permissions
     tty: true
