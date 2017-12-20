@@ -1,9 +1,0 @@
-Notes for which port goes where
-10200: Web frontend
-10201: Admin API
-10202: OpenID Connect API
-10203: Chat socketcluster
-10204: Messages API
-10205: Admin Frontend
-10206: Accounts API
-10207: Files API
