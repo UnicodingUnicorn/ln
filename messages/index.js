@@ -3,7 +3,9 @@ var bodyParser = require("body-parser");
 var cors = require("cors");
 
 var async = require("async");
+var bearerToken = require("bearer-token");
 var colour = require("colors");
+var jwt = require("jsonwebtoken");
 
 var redis = require("redis");
 var cache = redis.createClient({
@@ -122,155 +124,150 @@ app.use(cors({
   "preflightContinue": false
 }));
 
+var auth = (req, res, next) => {
+  bearerToken(req, (tok_err, token) => {
+    jwt.verify(token, process.env.CLIENT_SECRET, (ver_err, decoded) => {
+      if(ver_err){
+        res.status(403).json({
+          message : "Improper token"
+        });
+      }else if(decoded.aud != process.env.CLIENT_ID){
+        res.status(403).json({
+          message : "Improper token"
+        });
+      }else{
+        req.user = decoded.sub;
+        next();
+      }
+    });
+  });
+};
+
 app.get("/", function(req, res){
   res.status(200).json({
     message : "Received at Messages API"
   });
 });
 
-app.get("/messages/:group/:channel", function(req, res){
-  if(!req.get('User')){ //Check for user from auth
-    res.status(404).json({
-      message : 'No user found'
-    });
-  }else{
-    cache.exists(req.params.group + '+' + req.params.channel, (exists_err, gc_exists) => { //Check if gc exists
-      if(!gc_exists){
-        res.status(404).json({
-          message : 'No channel found'
-        });
-      }else{
-        permissions.view("permissions", "by_user_action_scope", { //Finally check if user has permission to view the channel
-          key : [req.get('User'), 'view_channel', {group : req.params.group, channel : req.params.channel}]
-        }, (view_err, channels) => {
-          if(!channels.rows[0]){
-            res.status(403).json({
-              message : 'No permission'
-            });
-          }else{
-            var options = {
-              key : [req.params.group, req.params.channel],
-              include_docs : true
-            };
-            //Add in count and offset if present
-            if(req.query.count)
-              options.limit = req.query.count;
-            if(req.query.offset)
-              options.offset = req.query.offset;
-            messages.view("messages", "by_channel", options, (err, body) => {
-              if(err){
-                res.status(200).json({}); //Just return an empty body
-              }else{
-                var messages_data = [];
-                body.rows.forEach((message) => {
-                  messages_data.push({
-                    user : message.doc.user,
-                    datetime : message.doc.datetime,
-                    message : message.doc.message,
-                    type : message.doc.type
-                  });
+app.get("/messages/:group/:channel", auth, function(req, res){
+  cache.exists(req.params.group + '+' + req.params.channel, (exists_err, gc_exists) => { //Check if gc exists
+    if(!gc_exists){
+      res.status(404).json({
+        message : 'No channel found'
+      });
+    }else{
+      permissions.view("permissions", "by_user_action_scope", { //Finally check if user has permission to view the channel
+        key : [req.user, 'view_channel', {group : req.params.group, channel : req.params.channel}]
+      }, (view_err, channels) => {
+        if(!channels.rows[0]){
+          res.status(403).json({
+            message : 'No permission'
+          });
+        }else{
+          var options = {
+            key : [req.params.group, req.params.channel],
+            include_docs : true
+          };
+          //Add in count and offset if present
+          if(req.query.count)
+            options.limit = req.query.count;
+          if(req.query.offset)
+            options.offset = req.query.offset;
+          messages.view("messages", "by_channel", options, (err, body) => {
+            if(err){
+              res.status(200).json({}); //Just return an empty body
+            }else{
+              var messages_data = [];
+              body.rows.forEach((message) => {
+                messages_data.push({
+                  user : message.doc.user,
+                  datetime : message.doc.datetime,
+                  message : message.doc.message,
+                  type : message.doc.type
                 });
-                res.status(200).json(messages_data);
-              }
-            });
-          }
-        });
-      }
-    });
-  }
-});
-
-app.get("/channels", function(req, res){
-  if(req.get('User')){
-    permissions.view("permissions", "by_user_action", {
-      key : [req.get('User'), 'view_channel']
-    }, (view_err, channel_rows) => {
-      var return_channels = [];
-      async.each(channel_rows.rows, (channel, cb) => {
-        channels.view('channels', 'by_group_channel', {
-          key : [channel.value.group, channel.value.channel],
-          include_docs : true
-        }, (view_err, ch_rows) => {
-          async.each(ch_rows.rows, (row, cb2) => {
-            return_channels.push({
-              group : row.doc.group,
-              channel : row.doc.channel,
-              users : row.doc.users
-            });
-            cb2();
-          }, cb);
-        });
-      }, () => {
-        res.status(200).json(return_channels);
-      });
-    });
-  }else{
-    res.status(404).json({
-      message : 'No user found'
-    });
-  }
-});
-
-app.get('/pms', function(req, res){
-  if(req.get('User')){
-    pms.viewWithList("pms", "by_user", "by_user", {
-      key : req.get('User')
-    }, (view_err, body) => {
-      res.status(200).json({
-        message : 'Success',
-        pms : body
-      });
-    });
-  }else{
-    res.status(404).json({
-      message : 'No user found'
-    });
-  }
-});
-
-app.get("/pms/:user", function(req, res){
-  if(req.get('User')){
-    //Key is userid1+userid2, where userid1 < userid2 (using the weird string metrics)
-    var key = req.get('User') < req.params.user ? req.get('User') + '+' + req.params.user : req.params.user + '+' + req.get('User');
-    var options = {
-      key : key,
-      include_docs : true
-    };
-    //Add in count and offset if present
-    if(req.query.count)
-      options.limit = req.query.count;
-    if(req.query.offset)
-      options.offset = req.query.offset;
-    pms.view("pms", "by_users", options, (view_err, rows) => {
-      if(view_err){
-        if(view_err.statusCode == 404){
-          res.status(200).json({
-            message : "Success",
-            messages : []
+              });
+              res.status(200).json(messages_data);
+            }
           });
         }
-      }else{
-        var return_pms = [];
-        rows.rows.forEach((row) => {
-          return_pms.push({
-            user : row.doc.user,
-            users : row.doc.users,
-            datetime : row.doc.datetime,
-            message : row.doc.message,
-            type : row.doc.type
+      });
+    }
+  });
+});
+
+app.get("/channels", auth, function(req, res){
+  permissions.view("permissions", "by_user_action", {
+    key : [req.user, 'view_channel']
+  }, (view_err, channel_rows) => {
+    var return_channels = [];
+    async.each(channel_rows.rows, (channel, cb) => {
+      channels.view('channels', 'by_group_channel', {
+        key : [channel.value.group, channel.value.channel],
+        include_docs : true
+      }, (view_err, ch_rows) => {
+        async.each(ch_rows.rows, (row, cb2) => {
+          return_channels.push({
+            group : row.doc.group,
+            channel : row.doc.channel,
+            users : row.doc.users
           });
-        });
+          cb2();
+        }, cb);
+      });
+    }, () => {
+      res.status(200).json(return_channels);
+    });
+  });
+});
+
+app.get('/pms', auth, function(req, res){
+  pms.viewWithList("pms", "by_user", "by_user", {
+    key : req.user
+  }, (view_err, body) => {
+    res.status(200).json({
+      message : 'Success',
+      pms : body
+    });
+  });
+});
+
+app.get("/pms/:user", auth, function(req, res){
+  //Key is userid1+userid2, where userid1 < userid2 (using the weird string metrics)
+  var key = req.user < req.params.user ? req.user + '+' + req.params.user : req.params.user + '+' + req.user;
+  var options = {
+    key : key,
+    include_docs : true
+  };
+  //Add in count and offset if present
+  if(req.query.count)
+    options.limit = req.query.count;
+  if(req.query.offset)
+    options.offset = req.query.offset;
+  pms.view("pms", "by_users", options, (view_err, rows) => {
+    if(view_err){
+      if(view_err.statusCode == 404){
         res.status(200).json({
           message : "Success",
-          messages : return_pms
+          messages : []
         });
       }
-    });
-  }else{
-    res.status(404).json({
-      message : 'No user found'
-    });
-  }
+    }else{
+      var return_pms = [];
+      rows.rows.forEach((row) => {
+        return_pms.push({
+          user : row.doc.user,
+          users : row.doc.users,
+          datetime : row.doc.datetime,
+          message : row.doc.message,
+          type : row.doc.type
+        });
+      });
+      res.status(200).json({
+        message : "Success",
+        messages : return_pms
+      });
+    }
+  });
 });
 
 app.listen(process.env.MESSAGES_PORT, function(err){

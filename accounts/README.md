@@ -21,6 +21,8 @@ The service also uses redis databases 0 and 1 for its cache.
 | ACCOUNTS_PORT | Port at which the service is exposed. Defaults to ```10206``` |
 | COUCHDB_USER | Username with which to access couchdb instance |
 | COUCHDB_PASSWORD | Password accompanying above username |
+| CLIENT_ID | Client ID of the token provided by *openid* |
+| CLIENT_SECRET | Client Secret of the token provided by *openid* |
 
 ## API
 
@@ -81,19 +83,20 @@ The database has encountered some form of error.
 GET /users
 ```
 
-Get all the users in a channel. Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Get all the users in a channel.
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Query Parameters
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| channel | String | Channel to query. Pass as stringified json: ```{group : <group>, channel : <channel>}```|
+| group | String | Group to query. |
+| channel | String | Channel to query. |
 
 #### Success 200
 
@@ -101,6 +104,30 @@ Get all the users in a channel. Requires the request to be first passed through 
 | ---- | ---- | ----------- |
 | message | String | Success|
 | users | Object | Object containing users in channel: ```{<user_id> : <rest of basic user information>, ...}```|
+
+#### Error 400
+
+The query is missing the channel parameters.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | Channel not found |
+
+#### Error 403
+
+An improper token was passed.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | Improper token |
+
+#### Error 404
+
+The channel specified by group and channel could not be found.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | Group-Channel not found |
 
 #### Error 500
 
@@ -110,22 +137,6 @@ The database has encountered some form of error.
 | ---- | ---- | ----------- |
 | message | String | Error message pertaining to the error involved.|
 
-#### Error 400
-
-The query is missing either the user, from an improper auth attempt, or the channel.
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| message | String | Foo not found, where foo is either 'Channel' or 'User' |
-
-#### Error 404
-
-The gc specified in channel could not be found.
-
-| Name | Type | Description |
-| ---- | ---- | ----------- |
-| message | String | Group-Channel not found |
-
 ---
 
 ### Update a user's information
@@ -134,13 +145,13 @@ The gc specified in channel could not be found.
 POST /user
 ```
 
-Update certain mutable aspects of a user's profile (username and avatar). Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Update certain mutable aspects of a user's profile (username and avatar).
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Body
 
@@ -149,6 +160,7 @@ All fields are optional, if not present, the associated value is simply not upda
 | Name | Type | Description |
 | ---- | ---- | ----------- |
 | username | String | Username of the user. |
+| avatar | String | URL to location of avatar picture. |
 
 #### Success 200
 
@@ -156,13 +168,13 @@ All fields are optional, if not present, the associated value is simply not upda
 | ---- | ---- | ----------- |
 | message | String | Success |
 
-#### Error 400
+#### Error 403
 
-The query is missing the user from an improper auth attempt.
+An improper token was passed.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | User not found |
+| message | String | Improper token |
 
 #### Error 404
 
@@ -207,6 +219,12 @@ POST /channel
 
 Add a channel or a user to one, depending on the presence of the ```user``` field.
 
+#### Headers
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| Authorization | Bearer | User token from login. |
+
 #### Body
 
 The ```user``` field is optional. If not present, a new channel is added. If present, the user specified is added to the channel specified.
@@ -233,11 +251,11 @@ There is a missing parameter in the body.
 
 #### Error 403
 
-The permission to perform the action (adding a channel/adding a user) cannot be found.
+The permission to perform the action (adding a channel/adding a user) cannot be found. Alternatively, an improper token was passed in the auth header.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | No permission |
+| message | String | No permission/Improper token |
 
 #### Error 404
 

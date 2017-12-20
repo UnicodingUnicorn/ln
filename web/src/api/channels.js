@@ -1,5 +1,4 @@
 import options from '../options';
-import auth from './auth';
 
 import Vue from 'vue';
 import Resource from 'vue-resource';
@@ -10,8 +9,8 @@ Vue.use(Resource);
 
 export default{
   getChannels(token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/channels'), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
+    Vue.http.get(options.MESSAGES_URL + '/channels', {
+      headers : {'Authorization' : 'Bearer ' + token}
     }).then(
       res => {
         cb(res.body);
@@ -21,11 +20,11 @@ export default{
     );
   },
   postChannel(token, gc, cb){
-    Vue.http.post(auth.withAuth(token, options.ACCOUNTS_URL + '/channel'), {
+    Vue.http.post(options.ACCOUNTS_URL + '/channel', {
       group : gc.group,
       channel : gc.channel
     }, {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
+      headers : {'Authorization' : 'Bearer ' + token}
     }).then(
       res => {
         cb(res.body);
@@ -35,8 +34,8 @@ export default{
     );
   },
   getPMS(token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms'), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
+    Vue.http.get(options.MESSAGES_URL + '/pms', {
+      headers : {'Authorization' : 'Bearer ' + token}
     }).then(
       res => {
         cb(res.body);

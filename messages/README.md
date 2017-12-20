@@ -22,6 +22,8 @@ The service also uses redis databases 0 and 1 for its cache.
 | MESSAGES_PORT | Port at which the service is exposed. Defaults to ```10204``` |
 | COUCHDB_USER | Username with which to access couchdb instance |
 | COUCHDB_PASSWORD | Password accompanying above username |
+| CLIENT_ID | Client ID of the token provided by *openid* |
+| CLIENT_SECRET | Client Secret of the token provided by *openid* |
 
 ## API
 
@@ -47,13 +49,13 @@ Just returns a simple received message. Helpful for finding if the API is up.
 GET /channels
 ```
 
-Get the channels a user is in. Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Get the channels a user is in.
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Success 200
 
@@ -67,13 +69,13 @@ An array of channel objects is returned, with the following format:
 }
 ```
 
-#### Error 404
+#### Error 403
 
-No user header could be found.
+An improper token was passed.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | No user found |
+| message | String | Improper token |
 
 ---
 
@@ -83,13 +85,13 @@ No user header could be found.
 GET /messages/:group/:channel
 ```
 
-Get the messages from a channel. Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Get the messages from a channel.
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Parameters
 
@@ -120,13 +122,21 @@ An array of message objects is returned, with the following format:
 }
 ```
 
-#### Error 404
+#### Error 403
 
-No user header/channel could be found.
+An improper token was passed.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | No user/channel found |
+| message | String | Improper token |
+
+#### Error 404
+
+The channel specified could be found.
+
+| Name | Type | Description |
+| ---- | ---- | ----------- |
+| message | String | No channel found |
 
 #### Error 403
 
@@ -144,13 +154,13 @@ The user has no permission to view the messages there.
 GET /pms
 ```
 
-Get the PMs a user is in. Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Get the PMs a user is in.
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Success 200
 
@@ -159,13 +169,13 @@ Get the PMs a user is in. Requires the request to be first passed through the ``
 | message | String | Success |
 | pms | Array | Array of user IDs the user has PMs with |
 
-#### Error 404
+#### Error 403
 
-No user header could be found.
+An improper token was passed.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | No user found |
+| message | String | Improper token |
 
 ---
 
@@ -175,13 +185,13 @@ No user header could be found.
 GET /pms/:user
 ```
 
-Get the PMs with a user. Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Get the PMs with a user.
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Parameters
 
@@ -205,10 +215,10 @@ These parameters specify constraints regarding the number of messages retrieved.
 | message | String | Success |
 | messages | Array | Array of message objects, matches that returned by the other messages call |
 
-#### Error 404
+#### Error 403
 
-No user header could be found.
+An improper token was passed.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | No user found |
+| message | String | Improper token |

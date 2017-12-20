@@ -342,7 +342,7 @@
         }
       },
       file_url : function(user, filename){
-        return options.FILES_URL + '/file/' + user + '/' + filename;
+        return options.FILES_URL + '/' + user + '/' + filename;
       },
       at_max : function(){
         if(this.current_messages)

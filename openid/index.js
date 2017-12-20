@@ -407,39 +407,6 @@ app.get("/userinfo", bodyParser.json(), bodyParser.urlencoded({extended : true})
   });
 });
 
-app.options('/verify/:token/:target_url', cors());
-app.all('/verify/:token/:target_url', function(req, res){
-  if(req.params.target_url){
-    var auth = basicauth(req);
-    if(auth){
-      openidCache.get(auth.name, function(get_err, client_secret){
-        if(!client_secret){
-          res.status(403).send("Forbidden");
-        }else{
-          if(client_secret === auth.pass){
-            jwt.verify(req.params.token, client_secret, function(ver_err, decoded){
-              if(ver_err){
-                res.status(403).send("Forbidden");
-              }else{
-                req.headers['User'] = decoded.sub;
-                req.pipe(request[req.method.toLowerCase()](req.params.target_url).on('error', function(err){
-                  res.status(404).send("Not found");
-                })).pipe(res);
-              }
-            });
-          }else{
-            res.status(403).send("Forbidden");
-          }
-        }
-      });
-    }else{
-      res.status(401).send("No client auth header");
-    }
-  }else{
-    res.status(404).send("Target not found");
-  }
-});
-
 app.listen(process.env.OPENID_PORT, function(err){
   err ? console.error(err) : console.log(("OpenID service up at " + process.env.OPENID_PORT).green);
 });

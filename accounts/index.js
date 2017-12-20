@@ -3,7 +3,9 @@ var bodyParser = require("body-parser");
 var cors = require("cors");
 
 var async = require("async");
+var bearerToken = require("bearer-token");
 var colors = require("colors");
+var jwt = require("jsonwebtoken");
 
 var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
 var creator = require("couchdb-creator");
@@ -131,6 +133,25 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
 
+var auth = (req, res, next) => {
+  bearerToken(req, (tok_err, token) => {
+    jwt.verify(token, process.env.CLIENT_SECRET, (ver_err, decoded) => {
+      if(ver_err){
+        res.status(403).json({
+          message : "Improper token"
+        });
+      }else if(decoded.aud != process.env.CLIENT_ID){
+        res.status(403).json({
+          message : "Improper token"
+        });
+      }else{
+        req.user = decoded.sub;
+        next();
+      }
+    });
+  });
+};
+
 app.get("/", function(req, res){
   res.status(200).json({
     message : "Received at Accounts API"
@@ -183,80 +204,69 @@ app.get("/user", function(req, res){
   }
 });
 
-app.post("/user", function(req, res){
-  if(!req.get("User")){
-    res.status(400).json({
-      message : 'User not found'
-    });
-  }else{
-    users.get(req.get("User"), (get_err, user) => {
-      if(get_err){
-        if(get_err.statusCode == 404){
-          res.status(404).json({
-            message : 'User not found'
-          });
-        }else{
-          res.status(500).json({
-            message : 'Internal database error'
-          });
-        }
+app.post("/user", auth, function(req, res){
+  users.get(req.user, (get_err, user) => {
+    if(get_err){
+      if(get_err.statusCode == 404){
+        res.status(404).json({
+          message : 'User not found'
+        });
       }else{
-        if(req.body.username && user.username != req.body.username){ //Don't waste time changing the same
-          var old_username = user.username;
-          cache.hget("usernames", old_username.toUpperCase(), (cache_err, user_ids) => {
-            user_ids = user_ids.split('+');
-            var new_ids = "";
-            async.each(user_ids, (user_id, cb) => {
-              if(user_id != user._id && user_id != "")
-                new_ids += user_id + "+";
-              cb();
-            }, () => {
-              if(new_ids == ""){
-                cache.hdel("usernames", old_username.toUpperCase());
-              }else{
-                cache.hset("usernames", old_username.toUpperCase(), new_ids);
-              }
-            });
-          });
-          user.username = req.body.username;
-          cache.hget("usernames", req.body.username.toUpperCase(), (cache_err, user_ids) => {
-            if(!user_ids){
-              user_ids = user._id + '+';
-            }else if(!user_ids.split('+').includes(user._id)){
-              user_ids += user._id + '+';
-            }
-            cache.hset("usernames", req.body.username.toUpperCase(), user_ids);
-          });
-        }
-        if(req.body.avatar)
-          user.avatar = req.body.avatar;
-        users.insert(user, (mod_err, mod_body) => {
-          res.status(200).json({
-            message : 'Success'
-          });
+        res.status(500).json({
+          message : 'Internal database error'
         });
       }
-    });
-  }
+    }else{
+      if(req.body.username && user.username != req.body.username){ //Don't waste time changing the same
+        var old_username = user.username;
+        cache.hget("usernames", old_username.toUpperCase(), (cache_err, user_ids) => {
+          user_ids = user_ids.split('+');
+          var new_ids = "";
+          async.each(user_ids, (user_id, cb) => {
+            if(user_id != user._id && user_id != "")
+              new_ids += user_id + "+";
+            cb();
+          }, () => {
+            if(new_ids == ""){
+              cache.hdel("usernames", old_username.toUpperCase());
+            }else{
+              cache.hset("usernames", old_username.toUpperCase(), new_ids);
+            }
+          });
+        });
+        user.username = req.body.username;
+        cache.hget("usernames", req.body.username.toUpperCase(), (cache_err, user_ids) => {
+          if(!user_ids){
+            user_ids = user._id + '+';
+          }else if(!user_ids.split('+').includes(user._id)){
+            user_ids += user._id + '+';
+          }
+          cache.hset("usernames", req.body.username.toUpperCase(), user_ids);
+        });
+      }
+      if(req.body.avatar)
+        user.avatar = req.body.avatar;
+      users.insert(user, (mod_err, mod_body) => {
+        res.status(200).json({
+          message : 'Success'
+        });
+      });
+    }
+  });
 });
 
-app.get('/users', function(req, res){
-  if(!req.get('User')){
-    res.status(400).json({
-      message : 'User not found'
-    });
-  }else if(!req.query.channel){
+app.get('/users', auth, function(req, res){
+  if(!(req.query.channel && req.query.group)){
     res.status(400).json({
       message : 'Channel not found'
     });
   }else{
-    var gc = JSON.parse(req.query.channel); //Get group-channel json from query
     permissions.view('permissions', 'by_user_action_scope', { //Check if user can view channel in scope group-channel
-      key : [req.get('User'), 'view_channel', gc]
+      key : [req.user, 'view_channel', {group : req.query.group, channel : req.query.channel}]
     }, (view_err, channel_users) => {
       if(channel_users.rows[0]){ //If a permission is found
         var full_users = {};
-        cache.get(gc.group + '+' + gc.channel, (get_err, channel_users) => {
+        cache.get(req.query.group + '+' + req.query.channel, (get_err, channel_users) => {
           channel_users = JSON.parse(channel_users);
           //Loop through all returned permissions and add the users to final return value
           async.each(channel_users, function(user_id, cb){
@@ -307,7 +317,7 @@ app.get('/usernames', function(req, res){
   });
 });
 
-app.post('/channel', function(req, res){
+app.post('/channel', auth, function(req, res){
   if(!req.body.group){
     res.status(400).json({
       message : "No group found"
@@ -338,7 +348,7 @@ app.post('/channel', function(req, res){
             });
           }else{
             permissions.view('permissions', 'by_user_action_scope', {
-              key : [req.get('User'), 'add_user', {group : req.body.group, channel : req.body.channel}]
+              key : [req.user, 'add_user', {group : req.body.group, channel : req.body.channel}]
             }, (perm_err, perm) => {
               if(!perm.rows[0]){
                 res.status(403).json({
@@ -423,27 +433,27 @@ app.post('/channel', function(req, res){
         });
       }else{
         permissions.view('permissions', 'by_user_action_scope', { //Check for permission to add in group
-          key : [req.get('User'), 'add_channel', req.body.group]
+          key : [req.user, 'add_channel', req.body.group]
         }, (view_err, perm) => {
           if(perm.rows[0]){
             //Insert channel creator into channel
             permissions.bulk({docs : [{
-              user : req.get('User'),
+              user : req.user,
               action : 'send_message',
               scope : {group : req.body.group, channel : req.body.channel},
               value : "1"
             },{
-              user : req.get('User'),
+              user : req.user,
               action : 'view_channel',
               scope : {group : req.body.group, channel : req.body.channel},
               value : {group : req.body.group, channel : req.body.channel}
             },{
-              user : req.get('User'),
+              user : req.user,
               action : 'send_file',
               scope : {group : req.body.group, channel : req.body.channel},
               value : "1"
             },{
-              user : req.get('User'),
+              user : req.user,
               action : 'add_user',
               scope : {group : req.body.group, channel : req.body.channel},
               value : "1"
@@ -453,18 +463,18 @@ app.post('/channel', function(req, res){
                   message : ins_err.message
                 });
               }else{
-                users_cache.hset(req.get('User'), req.body.group + '+' + req.body.channel, 1);
+                users_cache.hset(req.user, req.body.group + '+' + req.body.channel, 1);
                 channels.insert({
                   group : req.body.group,
                   channel : req.body.channel,
-                  users : [ req.get('User') ]
+                  users : [ req.user ]
                 }, (ins_err, ins_body) => {
                   if(ins_err){
                     res.status(500).json({
                       message : "Database error"
                     });
                   }else{
-                    cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([ req.get('User') ]));
+                    cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([ req.user ]));
                     res.status(200).json({
                       message : "Success"
                     });

@@ -22,7 +22,7 @@ services:
       - ./minio:/export
     command: minio server /export
   redis:
-    image: redis
+    image: redis:latest
     ports:
       - "6379:6379" #Open temporarily for debugging
     networks:
@@ -86,6 +86,8 @@ services:
       - MESSAGES_PORT=10204
       - COUCHDB_USER=admin
       - COUCHDB_PASSWORD=password
+      - CLIENT_ID=406jko1jadsm11w
+      - CLIENT_SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
     ports:
       - "10204:10204"
     depends_on:
@@ -101,6 +103,8 @@ services:
       - ACCOUNTS_PORT=10206
       - COUCHDB_USER=admin
       - COUCHDB_PASSWORD=password
+      - CLIENT_ID=406jko1jadsm11w
+      - CLIENT_SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
     ports:
       - "10206:10206"
     depends_on:
@@ -117,6 +121,8 @@ services:
       - MAX_SIZE=2000000000 #2GB
       - MINIO_ACCESS_KEY=ACCESS_KEY
       - MINIO_SECRET_KEY=SECRET_KEY
+      - CLIENT_ID=406jko1jadsm11w
+      - CLIENT_SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
     ports:
       - "10207:10207"
     depends_on:
@@ -125,19 +131,6 @@ services:
     networks:
       - minionet
       - redisnet
-  permissions:
-    build: ./permissions
-    tty: true
-    environment:
-      - PERMISSIONS_PORT=10208
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
-    ports:
-      - "10208:10208"
-    depends_on:
-      - couchdb
-    networks:
-      - couchnet
 networks:
   couchnet:
   minionet:

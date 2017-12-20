@@ -3,7 +3,6 @@ import Resource from 'vue-resource';
 
 import toastr from 'toastr';
 
-import auth from "./auth";
 import options from '../options';
 
 Vue.use(Resource);
@@ -31,8 +30,8 @@ export default{
     });
   },
   get_users(gc, token, cb){
-    Vue.http.get(auth.withAuth(token, options.ACCOUNTS_URL + '/users?channel=' + JSON.stringify({group : gc.group, channel : gc.channel})), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+    Vue.http.get(options.ACCOUNTS_URL + '/users?channel=' + gc.channel + "&group=" + gc.group, {
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       function(res){
@@ -42,8 +41,8 @@ export default{
     });
   },
   update_user(user_data, token, cb){
-    Vue.http.post(auth.withAuth(token, options.ACCOUNTS_URL + '/user'), user_data, {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+    Vue.http.post(options.ACCOUNTS_URL + '/user', user_data, {
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       (res) => {
@@ -73,12 +72,12 @@ export default{
     });
   },
   add_to_channel(userid, gc, token, cb){
-    Vue.http.post(auth.withAuth(token, options.ACCOUNTS_URL + '/channel'), {
+    Vue.http.post(options.ACCOUNTS_URL + '/channel', {
       user : userid,
       group : gc.group,
       channel : gc.channel
     }, {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       res => {

@@ -12,6 +12,8 @@ The default port for this service is ```10207```.
 | MAX_SIZE | Maximum size accepted for file uploads, in bytes. Do note that the file is buffered in the server's memory before it is properly stored. |
 | MINIO_ACCESS_KEY | Access key for the minio instance |
 | MINIO_SECRET_KEY | Secret for the minio instance |
+| CLIENT_ID | Client ID of the token provided by *openid* |
+| CLIENT_SECRET | Client Secret of the token provided by *openid* |
 
 ## API
 
@@ -37,13 +39,13 @@ Just returns a simple received message. Helpful for finding if the API is up.
 POST /file
 ```
 
-Stores a file for a user. Requires the request to be first passed through the ```/verify``` call of the *openid* service.
+Stores a file for a user.
 
 #### Headers
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| User | String | User ID passed from the *openid* service. |
+| Authorization | Bearer | User token from login. |
 
 #### Body
 
@@ -69,13 +71,13 @@ There is a missing parameter, and since there's only one in the entire body...
 
 #### Error 403
 
-There is no user header.
+An improper token was passed.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| message | String | No permission |
+| message | String | Improper token |
 
-#### Error 403
+#### Error 500
 
 An error occured with minio.
 
@@ -88,7 +90,7 @@ An error occured with minio.
 ### Get file
 
 ```
-GET /file/:user/:filename
+GET /:user/:filename
 ```
 
 Get a file.

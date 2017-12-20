@@ -25,8 +25,10 @@ var filesCache = redis.createClient({
   db : 3
 });
 
+var bearerToken = require("bearer-token");
 var colours = require("colors");
 var crypto = require("crypto");
+var jwt = require("jsonwebtoken");
 var streamifier = require("streamifier");
 var uniqid = require("uniqid");
 
@@ -36,6 +38,25 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended : true}));
 app.use(cors());
 
+var auth = (req, res, next) => {
+  bearerToken(req, (tok_err, token) => {
+    jwt.verify(token, process.env.CLIENT_SECRET, (ver_err, decoded) => {
+      if(ver_err){
+        res.status(403).json({
+          message : "Improper token"
+        });
+      }else if(decoded.aud != process.env.CLIENT_ID){
+        res.status(403).json({
+          message : "Improper token"
+        });
+      }else{
+        req.user = decoded.sub;
+        next();
+      }
+    });
+  });
+};
+
 app.get('/', function(req, res){
   res.status(200).json({
     message : "Received at Files API"
@@ -43,13 +64,8 @@ app.get('/', function(req, res){
 });
 
 app.options('/file', cors());
-app.post('/file', upload.single('file'), function(req, res){
-  var user = req.get('User');
-  if(!user){
-    res.status(403).json({
-      message : 'No permission'
-    });
-  }else if(!req.file){
+app.post('/file', auth, upload.single('file'), function(req, res){
+  if(!req.file){
     res.status(400).json({
       message : "File not found"
     });
@@ -82,31 +98,31 @@ app.post('/file', upload.single('file'), function(req, res){
       filesCache.get(hash, (get_err, file_users) => { //Check cache for existence of hash
         if(file_users)
           file_users = JSON.parse(file_users);
-        if(file_users && Object.keys(file_users).includes(user)){
+        if(file_users && Object.keys(file_users).includes(req.user)){
           res.status(200).json({
             message : "Success",
-            filename : file_users[user],
+            filename : file_users[req.user],
             originalname : req.file.originalname
           });
         }else{
           if(!file_users)
             file_users = {};
           var id = uniqid() + '.' + req.file.originalname.split('.')[req.file.originalname.split('.').length - 1];
-          file_users[user] = id;
+          file_users[req.user] = id;
           filesCache.set(hash, JSON.stringify(file_users));
-          mClient.bucketExists(user, (exists_err) => {
+          mClient.bucketExists(req.user, (exists_err) => {
             if(exists_err){ //Create user bucket if it doesn't exist
-              mClient.makeBucket(user, 'ap-southeast-1', (make_err) => {
+              mClient.makeBucket(req.user, 'ap-southeast-1', (make_err) => {
                 if(make_err){
                   res.status(500).json({
                     message : "Error storing file"
                   });
                 }else{
-                  putFile(user, req.file, id);
+                  putFile(req.user, req.file, id);
                 }
               });
             }else{
-              putFile(user, req.file, id);
+              putFile(req.user, req.file, id);
             }
           });
         }
@@ -116,7 +132,7 @@ app.post('/file', upload.single('file'), function(req, res){
 });
 
 //Files are stored in bucket <userid>
-app.get('/file/:user/:id', function(req, res){
+app.get('/:user/:id', function(req, res){
   mClient.getObject(req.params.user, req.params.id, (err, stream) => {
     if(err){
       if(err.code == 'NoSuchKey'){

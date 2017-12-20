@@ -110,7 +110,7 @@
           var formData = new FormData();
           formData.append('file', $('#avatar-upload')[0].files[0]);
           messagesAPI.send_file(formData, this.token, (res) => {
-            continueUpdate(options.FILES_URL + '/file/' + this.user.id + '/' + res.body.filename);
+            continueUpdate(options.FILES_URL + '/' + this.user.id + '/' + res.body.filename);
           });
         }else{
           continueUpdate(undefined);

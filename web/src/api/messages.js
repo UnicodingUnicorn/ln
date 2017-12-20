@@ -3,15 +3,14 @@ import Resource from 'vue-resource';
 
 import toastr from 'toastr';
 
-import auth from './auth';
 import options from '../options';
 
 Vue.use(Resource);
 
 export default{
   get_messages(gc, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + gc.group + '/' + gc.channel + '?count=' + options.HISTORY_COUNT), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+    Vue.http.get(options.MESSAGES_URL + '/messages/' + gc.group + '/' + gc.channel + '?count=' + options.HISTORY_COUNT, {
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       function(res){
@@ -21,8 +20,8 @@ export default{
     });
   },
   get_messages_offset(gc, offset, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/messages/' + gc.group + '/' + gc.channel + '?offset=' + offset + '&count=' + options.HISTORY_COUNT), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+    Vue.http.get(options.MESSAGES_URL + '/messages/' + gc.group + '/' + gc.channel + '?offset=' + offset + '&count=' + options.HISTORY_COUNT, {
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       function(res){
@@ -32,8 +31,8 @@ export default{
     });
   },
   get_pms(user, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '?count=' + options.HISTORY_COUNT), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+    Vue.http.get(options.MESSAGES_URL + '/pms/' + user + '?count=' + options.HISTORY_COUNT, {
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       function(res){
@@ -43,8 +42,8 @@ export default{
     });
   },
   get_pms_offset(user, offset, token, cb){
-    Vue.http.get(auth.withAuth(token, options.MESSAGES_URL + '/pms/' + user + '?offset=' + offset + '&count=' + options.HISTORY_COUNT), {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)},
+    Vue.http.get(options.MESSAGES_URL + '/pms/' + user + '?offset=' + offset + '&count=' + options.HISTORY_COUNT, {
+      headers : {'Authorization' : 'Bearer ' + token},
       responseType : 'json'
     }).then(
       function(res){
@@ -54,8 +53,8 @@ export default{
     });
   },
   send_file(data, token, cb){
-    Vue.http.post(auth.withAuth(token, options.FILES_URL + '/file'), data, {
-      headers : {'Authorization' : 'Basic ' + btoa(options.CLIENT_ID + ':' + options.CLIENT_SECRET)}
+    Vue.http.post(options.FILES_URL + '/file', data, {
+      headers : {'Authorization' : 'Bearer ' + token}
     }).then(
       function(res){
         cb(res);
