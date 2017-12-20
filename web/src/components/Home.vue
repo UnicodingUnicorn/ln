@@ -120,6 +120,7 @@
   import UserProfile from './UserProfile.vue'
 
   var nonce = crypto.randomBytes(32).toString('base64').slice(0, 32).replace(/\+/g, '0').replace(/\//g, '0');
+  var nonce_hash = crypto.createHash('sha256').update(nonce).digest('hex');
   var socket = null;
 
   var socket_options = {
@@ -139,7 +140,7 @@
         add_channel : '',
         profile_user : '',
         current_messages : [],
-        redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/'),
+        redirect_uri : options.OPENID_URL + '/authorise?scope=openid+profile+email&client_id=' + options.CLIENT_ID + '&response_type=id_token&nonce=' + nonce_hash + '&redirect_uri=' + encodeURIComponent(options.SELF_URL + '/#/'),
         default_avatar : options.AVATAR_URL
       }
     },
@@ -410,7 +411,7 @@
         if(this.token){
           this.$router.push('/');
         }else{
-          if(Cookies.get('nonce') == this.$route.query.nonce){
+          if(crypto.createHash('sha256').update(Cookies.get('nonce')).digest('hex') == this.$route.query.nonce){
             Cookies.remove('nonce');
             this.$store.dispatch('login', this.$route.query);
             this.$store.dispatch('get_userinfo', this.$route.query)

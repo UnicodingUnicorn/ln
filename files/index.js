@@ -89,7 +89,7 @@ app.post('/file', auth, upload.single('file'), function(req, res){
     };
     //Compute file's hash and checks for presence in cache.
     var rs = streamifier.createReadStream(req.file.buffer);
-    var shasum = crypto.createHash('sha256');
+    var shasum = crypto.createHash('md5');
     rs.on('data', (data) => {
       shasum.update(data);
     });
