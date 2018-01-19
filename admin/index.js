@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2018 Daniel Lim Hai
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
 var express = require("express");
 var bodyParser = require("body-parser");
 var cors = require("cors");
@@ -6,9 +24,8 @@ var session = require("express-session");
 
 var async = require("async");
 var basicauth = require("basic-auth");
-var bcrypt = require("bcrypt");
+var bcrypt = require("bcryptjs");
 var crypto = require("crypto");
-var salt_rounds = 10;
 var uniqid = require("uniqid");
 
 var ALPHANUMERIC = 'ABCEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
@@ -17,80 +34,23 @@ var colors = require("colors");
 
 var redis = require("redis");
 var cache = redis.createClient({
-  host : 'redis',
-  port : 6379
+  host : process.env.REDIS_HOST,
+  port : process.env.REDIS_PORT,
+  db : 0
 });
 var user_cache = redis.createClient({
-  host : 'redis',
-  port : 6379,
+  host : process.env.REDIS_HOST,
+  port : process.env.REDIS_PORT,
   db : 1
 });
 
-var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
-var creator = require("couchdb-creator");
-var users_design = {
-  'views' : {
-    'by_email' : {
-      'map' : function(doc){
-        emit(doc.email, doc._id);
-      }
-    }
-  }
-};
-var users;
-creator(nano, 'users', {name : 'email', doc : users_design}, function(db){
-  users = db;
-});
-var channels_design = {
-  'views' : {
-    'by_group_channel' : {
-      'map' : function(doc){
-        emit([doc.group, doc.channel], doc._id);
-      }
-    }
-  }
-}
-var channels;
-creator(nano, 'channels', {name : 'channels', doc : channels_design}, function(db){
-  channels = db;
-});
-var clients;
-creator(nano, 'clients', function(db){
-  clients = db;
-});
-
-var permissions_design = {
-  'views' : {
-    'by_user_action' : {
-      'map' : function(doc){
-        emit([doc.user, doc.action], doc.value);
-      }
-    },
-    'by_user_action_scope' : {
-      'map' : function(doc){
-        emit([doc.user, doc.action, doc.scope], doc.value);
-      }
-    },
-    'by_user' : {
-      'map' : function(doc){
-        emit(doc.user, doc._id);
-      }
-    },
-    'by_action' : {
-      'map' : function(doc){
-        emit(doc.action, doc.value);
-      }
-    },
-    'by_action_scope' : {
-      'map' : function(doc){
-        emit([doc.action, doc.scope], doc.value);
-      }
-    }
-  }
-};
-var permissions;
-creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
-  permissions = db;
+var { Pool } = require("pg");
+var db = new Pool({
+  host : process.env.PG_HOST,
+  port : process.env.PG_PORT,
+  database : "postgres",
+  user : process.env.PG_USER,
+  password : process.env.PG_PASSWORD
 });
 
 var app = express();
@@ -167,15 +127,19 @@ app.post("/login", function(req, res){
     res.data.message = "Missing password";
     res.render('login', res.data);
   }else{
-    nano.auth(req.body.username, req.body.password, (auth_err, auth_body, auth_headers) => {
-      if(auth_err){
-        console.log(auth_err);
-        res.data.message = auth_err.reason;
+    db.query("SELECT password FROM admins WHERE username = $1", [req.body.username], (err, auth_res) => {
+      if(!auth_res.rows[0]){
+        res.data.message = "Username not found";
         res.render('login', res.data);
       }else{
-        req.session.username = req.body.username;
-        req.session.password = req.body.password;
-        res.redirect('/');
+        if(auth_res.rows[0].password == req.body.password){
+          req.session.username = req.body.username;
+          req.session.password = req.body.password;
+          res.redirect('/');
+        }else{
+          res.data.message = "Invalid password";
+          res.render('login', res.data);
+        }
       }
     });
   }
@@ -205,17 +169,23 @@ app.get('/clients', auth, function(req, res){
     delete req.session.error;
   }
   res.data.clients = [];
-  clients.list({
-    include_docs : true
-  }, (list_err, body) => {
-    async.each(body.rows, (row, cb) => {
-      res.data.clients.push({
-        id : row.doc._id,
-        name : row.doc.name,
-        secret : row.doc.secret,
-        redirect_uris : row.doc.redirect_uris
+  db.query("SELECT * FROM clients", (list_err, list_res) => {
+    async.each(list_res.rows, (row, cb) => {
+      db.query("SELECT uri FROM client_redirect_uris WHERE client_id = $1", [row.id], (uri_err, uris) => {
+        var redirect_uris = [];
+        async.each(uris.rows, (indiv_uri, cb2) => {
+          redirect_uris.push(indiv_uri.uri);
+          cb2();
+        }, () => {
+          res.data.clients.push({
+            id : row.id,
+            name : row.name,
+            secret : row.secret,
+            redirect_uris : redirect_uris
+          });
+          cb();
+        });
       });
-      cb();
     }, () => {
       res.render('clients', res.data);
     });
@@ -224,44 +194,69 @@ app.get('/clients', auth, function(req, res){
 
 app.post("/client", auth, function(req, res){
   if(req.body.id){
-    var redirect_uris = [];
-    async.each(Object.keys(req.body), (key, cb) => {
-      if(key.split('-')[1] == 'uri')
-        redirect_uris.push(req.body[key]);
-      cb();
-    }, () => {
-      clients.get(req.body.id, (g_err, client) => {
-        clients.insert({
-          _rev : client._rev,
-          name : req.body.name,
-          secret : client.secret,
-          redirect_uris : redirect_uris
-        }, req.body.id, (err, body) => {
-          if(err){
-            req.session.error = err.reason;
-            res.redirect('/clients');
+    var cb = () => {
+      if(req.body.name){
+        db.query("UPDATE clients SET name = $1 WHERE id = $2", [
+          req.body.name,
+          req.body.id
+        ], (ins_name_err, ins_name_res) => {
+          if(ins_name_err){
+            console.log(ins_name_err);
           }else{
             req.session.success = "Success!";
             res.redirect('/clients');
           }
-        });
+        })
+      }else{
+        req.session.success = "Success!";
+        res.redirect('/clients');
+      }
+    };
+    if(req.body.last_uri){
+      db.query("INSERT INTO client_redirect_uris (client_id, uri) VALUES ($1, $2)", [
+        req.body.id,
+        req.body.last_uri
+      ], (ins_uri_err, ins_res) => {
+        if(ins_uri_err){
+          req.session.error = "Database error";
+          res.redirect('/clients');
+        }else{
+          cb();
+        }
       });
-    });
+    }else{
+      cb();
+    }
   }else{
-    clients.insert({
+    var client = {
+      id : uniqid(),
       name : req.body.name,
-      secret : crypto.createHmac('sha256', uniqid()).update(uniqid()).digest('hex'),
-      redirect_uris : req.body.redirect_uri
-    }, uniqid(), (err, body) => {
-      if(err){
-        req.session.error = err.reason;
+      secret : crypto.createHmac('sha256', uniqid()).update(uniqid()).digest('hex')
+    };
+    db.query("INSERT INTO clients (id, name, secret) VALUES ($1, $2, $3)", [
+      client.id,
+      client.name,
+      client.secret
+    ], (ins_err, ins_res) => {
+      if(ins_err){
+        console.log(ins_err);
+        req.session.error = "Database error";
         res.redirect('/clients');
       }else{
-        clients.get(body.id, (g_err, client) => {
-          req.session.success = "Success!";
-          req.session.client_id = client._id;
-          req.session.client_secret = client.secret;
-          res.redirect('/clients');
+        db.query("INSERT INTO client_redirect_uris (client_id, uri) VALUES ($1, $2)", [
+          client.id,
+          req.body.redirect_uri
+        ], (ins_uri_err, ins_uri_body) => {
+          if(ins_uri_err){
+            console.log(ins_err);
+            req.session.error = "Database error";
+            res.redirect('/clients');
+          }else{
+            req.session.success = "Success!";
+            req.session.client_id = client.id;
+            req.session.client_secret = client.secret;
+            res.redirect('/clients');
+          }
         });
       }
     });
@@ -285,16 +280,17 @@ app.get('/users', auth, function(req, res){
 });
 
 app.get('/user', auth, function(req, res){
-  users.get(req.query.id, (get_err, user) => {
+  console.log(req.query.id);
+  db.query("SELECT * FROM users WHERE id = $1", [req.query.id], (get_err, user_res) => {
     if(get_err){
-      if(get_err.statusCode == 404){
-        req.session.error = req.query.id + " not found";
-      }else{
-        req.session.error = get_err.reason;
-      }
+      req.session.error = get_err.reason;
+    }else if(!user_res.rows[0]){
+      console.log(user_res);
+      req.session.error = req.query.id + " not found";
     }else{
+      var user = user_res.rows[0];
       req.session.user = {
-        id : user._id,
+        id : user.id,
         name : user.name,
         username : user.username,
         email : user.email,
@@ -311,13 +307,32 @@ app.post("/user", auth, function(req, res){
     req.session.error = "ID not found";
     res.redirect("/users");
   }else{
-    users.get(req.body.id, (get_err, user) => {
+    db.query("SELECT * FROM users WHERE id = $1", [req.body.id], (get_err, user) => {
       if(get_err){
-        if(get_err.statusCode != 404){
-          req.session.error = get_err.reason;
-          res.redirect("/users");
-        }else{
-          user = {};
+        req.session.error = "Database error";
+        res.redirect("/users");
+      }else{
+        var userid = user.id || req.body.id;
+        var cb = (ins_err, ins_res, name) => {
+          if(ins_err){
+            console.log(ins_err);
+            req.session.error = "Database error";
+            res.redirect("/users");
+          }else{
+            console.log(ins_res);
+            cache.hget('usernames', name.toUpperCase(), (cache_err, val) => {
+              cache.hset('usernames', name.toUpperCase(), (val && !val.includes(userid)) ? val + userid + '+' : userid + '+');
+            });
+            user_cache.hset(userid, "_exists", 1);
+
+            req.session.success = "Success!";
+            if(req.body.autogenpass)
+              req.session.success += " Autogenned password is " + req.body.password;
+            res.redirect("/user?id=" + userid);
+          }
+        };
+        if(!user.rows[0]){
+          var password = "";
           if(!req.body.name){
             req.session.error = "Missing name field";
             res.redirect("/users");
@@ -342,65 +357,45 @@ app.post("/user", auth, function(req, res){
               for(var i = 0; i < 8; i++)
                 req.body.password += ALPHANUMERIC.charAt(Math.floor(Math.random() * ALPHANUMERIC.length));
             }
-            user.password = bcrypt.hashSync(req.body.password, salt_rounds);
+            password = bcrypt.hashSync(req.body.password, 8);
           }
+          db.query("INSERT INTO users (id, name, username, email, password, gender, dob) VALUES ($1, $2, $3, $4, $5, $6, $7)", [
+            userid,
+            req.body.name,
+            req.body.username,
+            req.body.email,
+            password,
+            req.body.gender,
+            req.body.dob
+          ], (ins_err, ins_res) => {
+            cb(ins_err, ins_res, req.body.name);
+          });
+        }else{
+          user = user.rows[0];
+          if(req.body.name)
+            user.name = req.body.name;
+          if(req.body.username)
+            user.username = req.body.username;
+          if(req.body.email)
+            user.email = req.body.email;
+          if(req.body.gender)
+            user.gender = req.body.gender;
+          if(req.body.dob)
+            user.dob = new Date(req.body.dob);
+          db.query("UPDATE users SET name = $1, username = $2, email = $3, gender = $4, dob = $5 WHERE id = $6", [
+            user.name,
+            user.username,
+            user.email,
+            user.gender,
+            user.dob,
+            userid
+          ], (ins_err, ins_res) => {
+            cb(ins_err, ins_res, user.name);
+          });
         }
       }
-      if(req.body.name)
-        user.name = req.body.name;
-      if(req.body.username)
-        user.username = req.body.username;
-      if(req.body.email)
-        user.email = req.body.email;
-      if(req.body.gender)
-        user.gender = req.body.gender;
-      if(req.body.dob)
-        user.dob = new Date(req.body.dob);
-      var userid = user._id || req.body.id;
-      if(user._id)
-        delete user._id;
-      users.insert(user, userid, (ins_err, ins_body) => {
-        if(ins_err){
-          res.session.error = ins_err.reason;
-          res.redirect("/users");
-        }else{
-          cache.hget('usernames', user.name.toUpperCase(), (cache_err, val) => {
-            cache.hset('usernames', user.name.toUpperCase(), (val && !val.includes(userid)) ? val + userid + '+' : userid + '+');
-          });
-          user_cache.hset(userid, "_exists", 1);
-
-          req.session.success = "Success!";
-          if(req.body.autogenpass)
-            req.session.success += " Autogenned password is " + req.body.password;
-          res.redirect("/user?id=" + userid);
-        }
-      });
     });
   }
-});
-
-app.delete("/user/:id", getAuth, function(req, res){
-  users.get(req.params.id, function(get_err, user){
-    if(get_err){
-      res.status(500).json({
-        message : get_err.message
-      });
-    }else{
-      nano.config.url = "http://" + req.auth.username + ":" + req.auth.pass + "@couchdb:5984"
-      users.destroy(req.params.id, user._rev, function(des_err, body){
-        nano.config.url = "http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984"
-        if(des_err){
-          res.status(500).json({
-            message : des_err.message
-          });
-        }else{
-          res.status(200).json({
-            message : "Success!"
-          });
-        }
-      });
-    }
-  });
 });
 
 app.get("/channels", auth, function(req, res){
@@ -413,25 +408,33 @@ app.get("/channels", auth, function(req, res){
     delete req.session.error;
   }
   var gcs_tmp = {};
-  channels.list({
-    include_docs : true
-  }, (list_err, body) => {
-    async.each(body.rows, (row, cb) => {
-      if(row.doc._id != '_design/channels')
-        gcs_tmp[row.doc.group] ? gcs_tmp[row.doc.group].push(row.doc.channel) : gcs_tmp[row.doc.group] = [row.doc.channel];
-      cb();
-    }, () => {
-      res.data.gcs = [];
-      async.each(Object.keys(gcs_tmp), (group, cb2) => {
-        res.data.gcs.push({
-          group : group,
-          channels : gcs_tmp[group]
-        });
-        cb2();
+  db.query("SELECT * FROM channels", (get_err, get_res) => {
+    res.data.gcs = [];
+    var tmp_gcs = {};
+    if(get_err){
+      console.log(get_err);
+      res.data.error = "Database error";
+      res.render('channels', res.data);
+    }else if(!get_res.rows[0]){
+      res.render('channels', res.data);
+    }else{
+      console.log(get_res.rows);
+      async.each(get_res.rows, (row, cb) => {
+        tmp_gcs[row.group] ? tmp_gcs[row.group].push(row.channel) : tmp_gcs[row.group] = [row.channel];
+        cb();
       }, () => {
-        res.render('channels', res.data);
+        console.log(tmp_gcs);
+        async.each(Object.keys(tmp_gcs), (key, cb2) => {
+          res.data.gcs.push({
+            group : key,
+            channels : tmp_gcs[key]
+          });
+          cb2();
+        }, () => {
+          res.render('channels', res.data);
+        });
       });
-    });
+    }
   });
 });
 
@@ -448,13 +451,13 @@ app.post("/channel", auth, function(req, res){
         req.session.error = "Channel already exists";
         res.redirect("/channels");
       }else{
-        channels.insert({
-          group : req.body.group,
-          channel : req.body.channel,
-          users : []
-        }, (ins_err, ins_body) => {
+        db.query("INSERT INTO channels (\"group\", channel) VALUES ($1, $2)", [
+          req.body.group,
+          req.body.channel
+        ], (ins_err, ins_body) => {
           if(ins_err){
-            req.session.error = ins_err.reason;
+            console.log(ins_err);
+            req.session.error = "Database error";
             res.redirect("/channels");
           }else{
             cache.set(req.body.group + '+' + req.body.channel, JSON.stringify([]));
@@ -478,62 +481,56 @@ app.post("/channel/user", auth, function(req, res){
     req.session.error = "User not found";
     res.redirect("/channels");
   }else{
-    channels.view('channels', 'by_group_channel', {
-      key : [req.body.group, req.body.channel],
-      include_docs : true
-    }, (chan_err, channel_docs) => {
-      if(chan_err){
-        req.session.error = chan_err.reason;
+    cache.get(req.body.group + '+' + req.body.channel, (exists_err, channel_users) => {
+      if(!channel_users){
+        req.session.error = "Group-Channel not found";
         res.redirect("/channels");
       }else{
-        if(!channel_docs.rows[0]){
-          req.session.error = "Group-Channel not found";
+        channel_users = JSON.parse(channel_users);
+        if(channel_users.includes(req.body.userid)){
+          req.session.error = "User already in channel";
           res.redirect("/channels");
         }else{
-          permissions.bulk({docs : [{
-            user : req.body.userid,
-            action : 'send_message',
-            scope : {group : req.body.group, channel : req.body.channel},
-            value : "1"
-          },{
-            user : req.body.userid,
-            action : 'view_channel',
-            scope : {group : req.body.group, channel : req.body.channel},
-            value : {group : req.body.group, channel : req.body.channel}
-          },{
-            user : req.body.userid,
-            action : 'send_file',
-            scope : {group : req.body.group, channel : req.body.channel},
-            value : "1"
-          },{
-            user : req.body.userid,
-            action : 'add_user',
-            scope : {group : req.body.group, channel : req.body.channel},
-            value : "1"
-          }]}, (ins_err, body) => {
+          db.query("INSERT INTO permissions (\"user\", scope, action) VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9), ($10, $11, $12)", [
+            req.body.userid,
+            req.body.group + '+' + req.body.channel,
+            'send_message',
+            req.body.userid,
+            req.body.group + '+' + req.body.channel,
+            'view_channel',
+            req.body.userid,
+            req.body.group + '+' + req.body.channel,
+            'send_file',
+            req.body.userid,
+            req.body.group + '+' + req.body.channel,
+            'add_user'
+          ], (ins_err, ins_body) => {
             if(ins_err){
-              req.session.error = ins_err.reason;
+              console.log(ins_err);
+              req.session.error = "Database error";
               res.redirect("/channels");
             }else{
               user_cache.hexists(req.body.user, req.body.group, (exists_err, group_exists) => {
                 if(!group_exists){
-                  permissions.insert({
-                    user : req.body.userid,
-                    action : 'add_channel',
-                    scope : req.body.group,
-                    value : "1"
-                  }, (ins_channel_err, ins_channel_body) => {
+                  db.query("INSERT INTO permissions (\"user\", scope, action) VALUES ($1, $2, $3)", [
+                    req.body.userid,
+                    req.body.group,
+                    'add_channel'
+                  ], (ins_channel_err, ins_channel_body) => {
                     user_cache.hset(req.body.user, req.body.group, 1);
                   });
                 }
               });
-              var channel = channel_docs.rows[0].doc;
-              if(!channel.users.includes(req.body.userid))
-                channel.users.push(req.body.userid);
+              channel_users.push(req.body.userid);
               user_cache.hset(req.body.user, req.body.group + '+' + req.body.channel, 1);
-              cache.set(req.body.group + '+' + req.body.channel, JSON.stringify(channel.users));
-              channels.insert(channel, (mod_err, mod_bod) => {
+              cache.set(req.body.group + '+' + req.body.channel, JSON.stringify(channel_users));
+              db.query("INSERT INTO channel_users (\"group\", channel, \"user\") VALUES ($1, $2, $3)", [
+                req.body.group,
+                req.body.channel,
+                req.body.userid
+              ], (mod_err, mod_res) => {
                 if(mod_err){
+                  console.log(mod_err);
                   req.session.error = mod_err.reason;
                   res.redirect("/channels");
                 }else{

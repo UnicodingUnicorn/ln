@@ -1,3 +1,21 @@
+/*
+Copyright (C) 2018 Daniel Lim Hai
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with this program; if not, write to the Free Software Foundation, Inc.,
+51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
 var express = require("express");
 var bodyParser = require("body-parser");
 var cors = require("cors");
@@ -9,111 +27,18 @@ var jwt = require("jsonwebtoken");
 
 var redis = require("redis");
 var cache = redis.createClient({
-  host : 'redis',
-  port : 6379,
+  host : process.env.REDIS_HOST,
+  port : process.env.REDIS_PORT,
   db : 0
 });
 
-var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
-var creator = require("couchdb-creator");
-
-var messages;
-var messages_design = {
-  'views' : {
-    'by_channel' : {
-      'map' : function(doc){
-        emit([doc.channel.group, doc.channel.channel], doc._id);
-      }
-    }
-  }
-};
-creator(nano, 'messages', {name : 'messages', doc : messages_design}, function(db){
-  messages = db;
-});
-
-var permissions_design = {
-  'views' : {
-    'by_user_action' : {
-      'map' : function(doc){
-        emit([doc.user, doc.action], doc.value);
-      }
-    },
-    'by_user_action_scope' : {
-      'map' : function(doc){
-        emit([doc.user, doc.action, doc.scope], doc.value);
-      }
-    },
-    'by_user' : {
-      'map' : function(doc){
-        emit(doc.user, doc.value);
-      }
-    },
-    'by_action' : {
-      'map' : function(doc){
-        emit(doc.action, doc.value);
-      }
-    },
-    'by_action_scope' : {
-      'map' : function(doc){
-        emit([doc.action, doc.scope], doc.value);
-      }
-    }
-  }
-};
-var permissions;
-creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
-  permissions = db;
-});
-var pms;
-var pms_design = {
-  'views' : {
-    'by_user' : {
-      'map' : function(doc){
-        emit(doc.users.split('+')[0], doc.users.split('+')[1]);
-        emit(doc.users.split('+')[1], doc.users.split('+')[0]);
-      }
-    },
-    'by_users' : {
-      'map' : function(doc){
-        emit(doc.users, null);
-      }
-    }
-  },
-  'lists' : {
-    'by_user' : function(head, req){
-      var row;
-      var users = [];
-      while(row = getRow()){
-        var is_in = false;
-        for(var user in users){
-          if(user == row.value){
-            is_in = true;
-            break;
-          }
-        }
-        if(!is_in){
-          users.push(row.value);
-        }
-      }
-      send(JSON.stringify(users));
-    }
-  }
-};
-creator(nano, 'pms', {name : 'pms', doc : pms_design}, function(db){
-  pms = db;
-});
-var channels_design = {
-  'views' : {
-    'by_group_channel' : {
-      'map' : function(doc){
-        emit([doc.group, doc.channel], doc._id);
-      }
-    }
-  }
-}
-var channels;
-creator(nano, 'channels', {name : 'channels', doc : channels_design}, function(db){
-  channels = db;
+var { Pool } = require("pg");
+var db = new Pool({
+  host : process.env.PG_HOST,
+  port : process.env.PG_PORT,
+  database : "postgres",
+  user : process.env.PG_USER,
+  password : process.env.PG_PASSWORD
 });
 
 var app = express();
@@ -156,34 +81,38 @@ app.get("/messages/:group/:channel", auth, function(req, res){
         message : 'No channel found'
       });
     }else{
-      permissions.view("permissions", "by_user_action_scope", { //Finally check if user has permission to view the channel
-        key : [req.user, 'view_channel', {group : req.params.group, channel : req.params.channel}]
-      }, (view_err, channels) => {
-        if(!channels.rows[0]){
+      db.query("SELECT EXISTS (SELECT 1 FROM permissions WHERE \"user\" = $1 AND scope = $2 AND action = $3)", [
+        req.user,
+        req.params.group + '+' + req.params.channel,
+        'view_channel'
+      ], (perm_err, channel_perm) => {
+        if(!channel_perm.rows[0].exists){
           res.status(403).json({
             message : 'No permission'
           });
         }else{
-          var options = {
-            key : [req.params.group, req.params.channel],
-            include_docs : true
-          };
-          //Add in count and offset if present
-          if(req.query.count)
-            options.limit = req.query.count;
-          if(req.query.offset)
-            options.offset = req.query.offset;
-          messages.view("messages", "by_channel", options, (err, body) => {
+          db.query("SELECT * FROM messages WHERE \"group\" = $1 AND channel = $2 LIMIT $3 OFFSET $4", [
+            req.params.group,
+            req.params.channel,
+            req.query.count ? req.query.count : 'ALL',
+            req.query.offset ? req.query.offset : 0
+          ], (err, body) => {
             if(err){
               res.status(200).json({}); //Just return an empty body
             }else{
               var messages_data = [];
               body.rows.forEach((message) => {
+                var message_text;
+                try{
+                  message_text = JSON.parse(message.message);
+                }catch (exception) {
+                  message_text = message.message;
+                }
                 messages_data.push({
-                  user : message.doc.user,
-                  datetime : message.doc.datetime,
-                  message : message.doc.message,
-                  type : message.doc.type
+                  user : message.user,
+                  datetime : message.datetime.getTime(),
+                  message : message_text,
+                  type : message.type
                 });
               });
               res.status(200).json(messages_data);
@@ -196,70 +125,99 @@ app.get("/messages/:group/:channel", auth, function(req, res){
 });
 
 app.get("/channels", auth, function(req, res){
-  permissions.view("permissions", "by_user_action", {
-    key : [req.user, 'view_channel']
-  }, (view_err, channel_rows) => {
-    var return_channels = [];
-    async.each(channel_rows.rows, (channel, cb) => {
-      channels.view('channels', 'by_group_channel', {
-        key : [channel.value.group, channel.value.channel],
-        include_docs : true
-      }, (view_err, ch_rows) => {
-        async.each(ch_rows.rows, (row, cb2) => {
-          return_channels.push({
-            group : row.doc.group,
-            channel : row.doc.channel,
-            users : row.doc.users
+  db.query("SELECT array_agg(scope) FROM permissions WHERE \"user\" = $1 AND action = $2 GROUP BY \"user\"", [
+    req.user,
+    'view_channel'
+  ], (view_err, channels) => {
+    if(!view_err){
+      if(!channels.rows[0]){
+        res.status(200).json([]);
+      }else{
+        var return_channels = [];
+        async.each(channels.rows[0].array_agg, (channel, cb) => {
+          var gc = channel.split('+');
+          db.query("SELECT array_agg(\"user\") FROM channel_users WHERE \"group\" = $1 AND channel = $2 GROUP BY \"group\"", [
+            gc[0],
+            gc[1]
+          ], (err2, res2) => {
+            if(err2){
+              console.log(err2);
+              cb(err2);
+            }else{
+              return_channels.push({
+                group : gc[0],
+                channel : gc[1],
+                users : res2.rows[0] ? res2.rows[0].array_agg : []
+              });
+              cb();
+            }
           });
-          cb2();
-        }, cb);
-      });
-    }, () => {
-      res.status(200).json(return_channels);
-    });
+        }, (err) => {
+          res.status(200).json(err ? [] : return_channels);
+        });
+      }
+    }
   });
 });
 
 app.get('/pms', auth, function(req, res){
-  pms.viewWithList("pms", "by_user", "by_user", {
-    key : req.user
-  }, (view_err, body) => {
-    res.status(200).json({
-      message : 'Success',
-      pms : body
-    });
+  var return_users = [];
+  db.query("SELECT \"user\", recipient FROM pms WHERE recipient = $1 OR \"user\" = $2", [
+    req.user,
+    req.user
+  ], (get_err, get_res) => {
+    if(get_err){
+      console.log(get_err);
+      res.status(200).json({
+        message : "Success",
+        pms : []
+      });
+    }else{
+      async.each(get_res.rows, (row, cb) => {
+        if(!return_users.includes(row.user) && row.user != req.user)
+          return_users.push(row.user);
+        if(!return_users.includes(row.recipient) && row.recipient != req.user)
+          return_users.push(row.recipient);
+        cb();
+      }, () => {
+        res.status(200).json({
+          message : 'Success',
+          pms : return_users
+        });
+      });
+    }
   });
 });
 
 app.get("/pms/:user", auth, function(req, res){
   //Key is userid1+userid2, where userid1 < userid2 (using the weird string metrics)
   var key = req.user < req.params.user ? req.user + '+' + req.params.user : req.params.user + '+' + req.user;
-  var options = {
-    key : key,
-    include_docs : true
-  };
-  //Add in count and offset if present
-  if(req.query.count)
-    options.limit = req.query.count;
-  if(req.query.offset)
-    options.offset = req.query.offset;
-  pms.view("pms", "by_users", options, (view_err, rows) => {
-    if(view_err){
-      if(view_err.statusCode == 404){
-        res.status(200).json({
-          message : "Success",
-          messages : []
-        });
-      }
+  db.query("SELECT * FROM pms WHERE users = $1 LIMIT $2 OFFSET $3", [
+    key,
+    req.query.count ? req.query.count : 'ALL',
+    req.query.offset ? req.query.offset : 0
+  ], (get_err, get_res) => {
+    if(get_err){
+      console.log(get_err);
+      res.status(200).json({
+        message : "Success",
+        messages : []
+      });
     }else{
       var return_pms = [];
-      rows.rows.forEach((row) => {
+      get_res.rows.forEach((row) => {
+        var message_text;
+        try{
+          message_text = JSON.parse(row.message);
+        }catch (exception) {
+          message_text = row.message;
+        }
         return_pms.push({
-          user : row.doc.user,
-          users : row.doc.users,
-          datetime : row.doc.datetime,
-          message : row.doc.message,
-          type : row.doc.type
+          user : row.user,
+          users : row.users,
+          datetime : row.datetime.getTime(),
+          message : message_text,
+          type : row.type
         });
       });
       res.status(200).json({

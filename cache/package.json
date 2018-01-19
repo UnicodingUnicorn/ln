@@ -1,7 +1,7 @@
 {
-  "name": "permissions",
+  "name": "cache",
   "version": "1.0.0",
-  "description": "Permissions service for ln.",
+  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -9,12 +9,10 @@
   "author": "orcas",
   "license": "ISC",
   "dependencies": {
-    "body-parser": "^1.18.2",
+    "async": "^2.6.0",
     "colors": "^1.1.2",
-    "cors": "^2.8.4",
-    "couchdb-creator": "^1.0.3",
-    "express": "^4.16.2",
     "nano": "^6.4.2",
-    "request": "^2.83.0"
+    "pg": "^7.4.1",
+    "redis": "^2.8.0"
   }
 }

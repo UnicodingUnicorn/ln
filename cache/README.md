@@ -1,14 +1,12 @@
-# admin
+# cache
 
-Admin interface (combined frontend/backend) for the creation and editing of clients, users and channels. Depends on ```pg``` for its database and ```redis``` as a cache.
-
-The default port for this service is ```10201```.
+Script to build up the ```redis``` cache from ```postgres``` tables. Needless to say, relies on ```redis``` and ```postgres```.
 
 ## Running Standalone.
 
 Requires ```npm``` and ```node```.
 
-1. Make sure there are running instances of ```postgres``` and ```redis```. Make sure the ```postgres``` instance is populated with the tables described in ["Tables used"](#Tables-used). Run the ```cache``` as specified in its README to populate the ```redis``` cache.
+1. Make sure there are running instances of ```postgres``` and ```redis```. Make sure the ```postgres``` instance is populated with the tables described in ["Tables used"](#Tables-used).
 2. Edit the environment variables specified in ["Environment variables"](#Environment-variables) to requirements.
 3. Run ```npm install```.
 4. Run ```node index.js```.
@@ -17,21 +15,18 @@ Requires ```npm``` and ```node```.
 
 | Name | Description |
 | ---- | ----------- |
-| admin | Admin credentials (username/password). Default starting entry "username"/"password". |
 | channels | Channel information. |
 | channel_users | Group-Channel each User belongs to. |
 | clients | Client information. |
-| client_redirect_uris | Redirect URIs possessed by each client. |
 | permissions | User permissions. |
 | users | User information. |
 
-The service also uses *redis* databases 0 and 1 for its cache.
+The service also uses *redis* databases 0, 1 and 2 for its cache.
 
 ## Environment variables
 
 | Name | Description |
 | ---- | ----------- |
-| ADMIN_PORT | Port at which the service is exposed. Defaults to ```10201```. |
 | PG_HOST | Hostname of the *pg* instance. |
 | PG_PORT | Port *pg* instance is exposed on. |
 | PG_USER | Username with which to access *pg* instance |

@@ -351,7 +351,7 @@
         return false;
       },
       is_image : function(filename){
-        var fileformat = filename.split('.')[filename.split('.').length - 1];
+        var fileformat = filename.split('.')[filename.split('.').length - 1].toLowerCase();
         return fileformat.match(/(jpeg)|(jpg)|(png)|(gif)/);
       },
       image_load : function(){

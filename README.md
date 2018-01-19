@@ -1,37 +1,53 @@
 # ln
-A chat based LMS built on a service-framework. Basically Slack.
+A chat based LMS built on a microservice-framework. Basically LMS Slack.
 
 ## Running
 
-The application as a whole is a collection of Docker containers, put together by docker-compose. As such, they are needed in order to run the thing as-is.
+The application as a whole is a collection of [Docker](https://www.docker.com/) containers, orchestrated using [docker-compose](https://docs.docker.com/compose/). To run individual [services](#services), refer to the respective service's README.
 
-### Build the frontend (web):
+If need be, go through ```docker-compose.yml``` and edit the fairly self-explanatory environment variables to one's specifications. Further documentation is provided in each service's README if documentation is needed.
 
-```
-cd web
-npm run build
-```
+### To run:
 
-### Run the thing
+1. Go to ```./web``` and run ```npm run build```. This builds the frontend page.
+2. In root, run ```docker-compose up --build```. It may be necessary to kill and run it again to build the cache properly.
 
-Prior to running, edit the ```docker-compose.yml``` file to change the environment variables to use-specific values. In particular, for the interest of security, it is advised to update the access credentials for couchdb and minio to something more secure.
+### To run developmentally:
 
-```
-docker-compose up --build
-```
+1. In root, run ```docker-compose up --build```. It may be necessary to kill and run it again to build the cache properly.
+2. Go to ```./web``` and run ```npm run dev```.
 
-On the other hand, if one is so inclined to run a service individually manually, then what one needs to do is check the ```docker-compose.yml``` file for the appropriate service, whose name will always correspond with the name of the folder the service is in. Check what database the service depends on, and make sure to run those manually too.
+## Default values
+
+Client:
+| id | name | secret |
+| 406jko1jadsm11w | ln | 5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38 |
+
+Client Redirect URIs:
+| client_id | uri |
+| 406jko1jadsm11w | 'http://localhost:8080/#/' |
+| 406jko1jadsm11w | 'http://192.168.99.100:8080/#/' |
+
+Admins:
+
+| username | password |
+| -------- | -------- |
+| username | password |
 
 ## Services
+
+Each service is standalone save for its database dependencies.
 
 | Name | Description | Default Port |
 | ---- | ----------- | ------------ |
 | [accounts](./accounts/README.md) | Accounts API for managing and retrieving user accounts. | 10206
 | [admin](./admin/README.md) | Admin interface for creating and editing clients, users and channels. | 10201 |
+| [cache](./cache/README.md) | Script to rebuild cache from database tables. | N/A |
 | [chat](./chat/README.md) | Chat socketcluster handling the sending and logging of messages. | 10203 |
 | [files](./files/README.md) | Wrapper for minio to handle files on a user-specific basis. | 10207 |
 | [messages](./messages/README.md) | API for retrieval of message logs as well as channel information. | 10204 |
 | [openid](./openid/README.md) | OpenID Connect service handling login. | 10202 |
+| [pg](./pg/README.md) | DDL to generate database tables | N/A |
 | [web](./web/README/md) | Web frontend. Served with Apache httpd | 10200 |
 
 ## Permissions notes

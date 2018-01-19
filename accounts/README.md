@@ -1,28 +1,41 @@
 # accounts
 
-Accounts API for accessing and modifying user accounts. Depends on ```couchdb``` as its database and ```redis``` as its cache.
+Accounts API focused on the viewing and modifying user accounts. Depends on ```pg``` as its database and ```redis``` as its cache.
 
 The default port for this service is ```10206```.
 
-## Database dependencies
+## Running Standalone.
+
+Requires ```npm``` and ```node```.
+
+1. Make sure there are running instances of ```postgres``` and ```redis```. Make sure the ```postgres``` instance is populated with the tables described in ["Tables used"](#Tables-used). Run the ```cache``` as specified in its README to populate the ```redis``` cache.
+2. Edit the environment variables specified in ["Environment variables"](#Environment-variables) to requirements.
+3. Run ```npm install```.
+4. Run ```node index.js```.
+
+## Tables used
 
 | Name | Description |
 | ---- | ----------- |
-| users | Database containing user information. |
-| permissions | Database containing user permissions. |
-| channels | Database containing channel information. |
+| users | User information. |
+| permissions | User permissions. |
+| channel_users | Group-Channel per User. |
 
-The service also uses redis databases 0 and 1 for its cache.
+The service also uses *redis* databases 0 and 1 for its cache.
 
 ## Environment variables
 
 | Name | Description |
 | ---- | ----------- |
-| ACCOUNTS_PORT | Port at which the service is exposed. Defaults to ```10206``` |
-| COUCHDB_USER | Username with which to access couchdb instance |
-| COUCHDB_PASSWORD | Password accompanying above username |
+| ACCOUNTS_PORT | Port at which the service is exposed. Defaults to ```10206```. |
 | CLIENT_ID | Client ID of the token provided by *openid* |
 | CLIENT_SECRET | Client Secret of the token provided by *openid* |
+| PG_HOST | Hostname of the *pg* instance. |
+| PG_PORT | Port *pg* instance is exposed on. |
+| PG_USER | Username with which to access *pg* instance |
+| PG_PASSWORD | Password accompanying above username |
+| REDIS_HOST | Hostname of the *redis* instance. |
+| REDIS_PORT | Port *redis* instance is on. |
 
 ## API
 
@@ -89,7 +102,7 @@ Get all the users in a channel.
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| Authorization | Bearer | User token from login. |
+| Authorization | Bearer | User token from *openid* login. |
 
 #### Query Parameters
 
@@ -151,7 +164,7 @@ Update certain mutable aspects of a user's profile (username and avatar).
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| Authorization | Bearer | User token from login. |
+| Authorization | Bearer | User token from *openid* login. |
 
 #### Body
 
@@ -223,7 +236,7 @@ Add a channel or a user to one, depending on the presence of the ```user``` fiel
 
 | Name | Type | Description |
 | ---- | ---- | ----------- |
-| Authorization | Bearer | User token from login. |
+| Authorization | Bearer | User token from *openid* login. |
 
 #### Body
 

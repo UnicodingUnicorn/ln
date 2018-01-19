@@ -11,7 +11,7 @@
   "dependencies": {
     "async": "^2.5.0",
     "basic-auth": "^1.1.0",
-    "bcrypt": "^1.0.2",
+    "bcryptjs": "^2.4.3",
     "bearer-token": "^2.0.1",
     "body-parser": "^1.17.2",
     "colors": "^1.1.2",
@@ -23,6 +23,7 @@
     "express-handlebars": "^3.0.0",
     "jsonwebtoken": "^7.4.1",
     "nano": "^6.4.0",
+    "pg": "^7.4.1",
     "redis": "^2.8.0",
     "uniqid": "^4.1.1"
   }

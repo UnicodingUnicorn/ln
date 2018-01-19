@@ -11,15 +11,14 @@
   "dependencies": {
     "async": "^2.6.0",
     "basic-auth": "^2.0.0",
-    "bcrypt": "^1.0.2",
+    "bcryptjs": "^2.4.3",
     "body-parser": "^1.17.2",
     "colors": "^1.1.2",
     "cors": "^2.8.4",
-    "couchdb-creator": "^1.0.0",
     "express": "^4.15.3",
     "express-handlebars": "^3.0.0",
     "express-session": "^1.15.6",
-    "nano": "^6.3.0",
+    "pg": "^7.4.1",
     "redis": "^2.8.0",
     "uniqid": "^4.1.1"
   }

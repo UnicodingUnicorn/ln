@@ -1,8 +1,17 @@
 # files
 
-Files API for handling user file uploads and storing them. Depends on ```minio``` for its filestore.
+Files API for handling user file uploads and storing them. Depends on ```minio``` for its filestore and ```redis``` as its cache.
 
-The default port for this service is ```10207```.
+The default port for this service is ```10207```. It uses redis database 3 to store file hashes to prevent storing repeats for the same user.
+
+## Running Standalone.
+
+Requires ```npm``` and ```node```.
+
+1. Make sure there is a running instances of ```minio``` and ```redis```.
+2. Edit the environment variables specified in ["Environment variables"](#Environment-variables) to requirements.
+3. Run ```npm install```.
+4. Run ```node index.js```.
 
 ## Environment variables
 

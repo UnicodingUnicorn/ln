@@ -1,18 +1,35 @@
 version: "3"
 services:
-  couchdb:
-    image: couchdb:latest
+  pg:
+    build: ./pg
     environment:
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
     ports:
-      - "5984:5984" #Open temporarily for debugging
+      - "5432:5432"
     networks:
-      - couchnet
+      - pgnet
+  cache:
+    build: ./cache
+    tty: true
+    depends_on:
+      - redis
+      - pg
+    environment:
+      - PG_HOST=pg
+      - PG_PORT=5432
+      - PG_USER=user
+      - PG_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    networks:
+      - redisnet
+      - pgnet
   minio:
     image: minio/minio:latest
     ports:
-      - "9000:9000"
+      - "9000:9000" #Open temporarily for debugging
     networks:
       - minionet
     environment:
@@ -32,87 +49,112 @@ services:
     tty: true
     environment:
       - ADMIN_PORT=10201
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
+      - PG_HOST=pg
+      - PG_PORT=5432
+      - PG_USER=user
+      - PG_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "10201:10201"
     depends_on:
-      - couchdb
+      - cache
+      - redis
+      - pg
     networks:
-      - couchnet
       - redisnet
+      - pgnet
   openid:
     build: ./openid
     tty: true
     environment:
       - OPENID_PORT=10202
       - ISS=localhost
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
+      - PG_HOST=pg
+      - PG_PORT=5432
+      - PG_USER=user
+      - PG_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "10202:10202"
     depends_on:
-      - couchdb
+      - cache
       - redis
+      - pg
     networks:
-      - couchnet
       - redisnet
-  # web:
-  #   image: httpd
-  #   volumes:
-  #     - ./web/dist:/usr/local/apache2/htdocs/
-  #   ports:
-  #     - "10200:80"
+      - pgnet
+  web:
+    image: httpd
+    volumes:
+      - ./web/dist:/usr/local/apache2/htdocs/
+    ports:
+      - "10200:80"
   chat:
     build: ./chat
     tty: true
     environment:
       - SOCKETCLUSTER_PORT=10203
-      - SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
+      - CLIENT_SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
+      - PG_HOST=pg
+      - PG_PORT=5432
+      - PG_USER=user
+      - PG_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "10203:10203"
     depends_on:
-      - couchdb
       - redis
+      - pg
     networks:
-      - couchnet
       - redisnet
+      - pgnet
   messages:
     build: ./messages
     tty: true
     environment:
       - MESSAGES_PORT=10204
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
       - CLIENT_ID=406jko1jadsm11w
       - CLIENT_SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
+      - PG_HOST=pg
+      - PG_PORT=5432
+      - PG_USER=user
+      - PG_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "10204:10204"
     depends_on:
-      - couchdb
+      - cache
       - redis
+      - pg
     networks:
-      - couchnet
       - redisnet
+      - pgnet
   accounts:
     build: ./accounts
     tty: true
     environment:
       - ACCOUNTS_PORT=10206
-      - COUCHDB_USER=admin
-      - COUCHDB_PASSWORD=password
       - CLIENT_ID=406jko1jadsm11w
       - CLIENT_SECRET=5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38
+      - PG_HOST=pg
+      - PG_PORT=5432
+      - PG_USER=user
+      - PG_PASSWORD=password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     ports:
       - "10206:10206"
     depends_on:
-      - couchdb
+      - cache
       - redis
+      - pg
     networks:
-      - couchnet
       - redisnet
+      - pgnet
   files:
     build: ./files
     tty: true
@@ -132,6 +174,6 @@ services:
       - minionet
       - redisnet
 networks:
-  couchnet:
   minionet:
   redisnet:
+  pgnet:

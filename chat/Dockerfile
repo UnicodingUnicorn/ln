@@ -9,4 +9,4 @@ RUN npm install .
 
 EXPOSE $SOCKETCLUSTER_PORT
 
-CMD ["./wait-for-it.sh", "couchdb:5984", "--", "./wait-for-it.sh", "redis:6379", "--", "npm", "run", "start:docker"]
+CMD ["npm", "run", "start:docker"]
