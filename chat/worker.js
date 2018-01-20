@@ -29,7 +29,6 @@ var jwt = require("jsonwebtoken");
 var secret = process.env.CLIENT_SECRET;
 
 var async = require("async");
-var creator = require("couchdb-creator");
 var redis = require("redis");
 var cache = redis.createClient({
   host : process.env.REDIS_HOST,
@@ -50,108 +49,6 @@ var db = new Pool({
   user : process.env.PG_USER,
   password : process.env.PG_PASSWORD
 });
-
-// var nano = require("nano")("http://" + process.env.COUCHDB_USER + ":" + process.env.COUCHDB_PASSWORD + "@couchdb:5984");
-//
-// var messages = nano.use("messages");
-// var messages_design = {
-//   'views' : {
-//     'by_channel' : {
-//       'map' : function(doc){
-//         emit([doc.channel.group, doc.channel.channel], doc._id);
-//       }
-//     }
-//   }
-// };
-// // creator(nano, 'messages', {name : 'messages', doc : messages_design}, function(db){
-// //   messages = db;
-// // });
-//
-// var pms = nano.use("pms");
-// var pms_design = {
-//   'views' : {
-//     'by_user' : {
-//       'map' : function(doc){
-//         emit(doc.users.split('+')[0], doc.users.split('+')[1]);
-//         emit(doc.users.split('+')[1], doc.users.split('+')[0]);
-//       }
-//     },
-//     'by_users' : {
-//       'map' : function(doc){
-//         emit(doc.users, null);
-//       }
-//     }
-//   },
-//   'lists' : {
-//     'by_user' : function(head, req){
-//       var row;
-//       var users = [];
-//       while(row = getRow()){
-//         var is_in = false;
-//         for(var user in users){
-//           if(user == row.value){
-//             is_in = true;
-//             break;
-//           }
-//         }
-//         if(!is_in){
-//           users.push(row.value);
-//         }
-//       }
-//       send(JSON.stringify(users));
-//     }
-//   }
-// };
-// // creator(nano, 'pms', {name : 'pms', doc : pms_design}, function(db){
-// //   pms = db;
-// // });
-//
-// var permissions_design = {
-//   'views' : {
-//     'by_user_action' : {
-//       'map' : function(doc){
-//         emit([doc.user, doc.action], doc.value);
-//       }
-//     },
-//     'by_user_action_scope' : {
-//       'map' : function(doc){
-//         emit([doc.user, doc.action, doc.scope], doc.value);
-//       }
-//     },
-//     'by_user' : {
-//       'map' : function(doc){
-//         emit(doc.user, doc._id);
-//       }
-//     },
-//     'by_action' : {
-//       'map' : function(doc){
-//         emit(doc.action, doc.value);
-//       }
-//     },
-//     'by_action_scope' : {
-//       'map' : function(doc){
-//         emit([doc.action, doc.scope], doc.value);
-//       }
-//     }
-//   }
-// };
-// var permissions = nano.use("permissions");
-// // creator(nano, 'permissions', {name : 'permissions', doc : permissions_design}, function(db){
-// //   permissions = db;
-// //   permissions.view('permissions', 'by_action', {
-// //     key : 'send_message',
-// //     include_docs : true
-// //   }, function(get_err, perms){
-// //     if(get_err){
-// //       console.error(get_err);
-// //     }else{
-// //       async.each(perms.rows, (row, cb) => {
-// //         user_cache.hset(row.doc.user, row.doc.scope.group + '+' + row.doc.scope.channel, 1);
-// //         cb();
-// //       }, () => {});
-// //     }
-// //   });
-// // });
 
 class Worker extends SCWorker {
   run() {
