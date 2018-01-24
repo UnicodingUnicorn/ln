@@ -106,14 +106,13 @@ class Worker extends SCWorker {
                   //Add metadata
                   req.data.datetime = datetime;
                   req.data.user = authToken.userid;
-                  req.data.group = gc[0];
-                  req.data.channel = gc[1];
+                  req.data.channel = {
+                    group : gc[0],
+                    channel : gc[1]
+                  };
                   next();
                 }
               });
-              // messages.insert(req.data, datetime.getTime() + "&" + req.data.user, (err, message) => {
-              //   err ? next(err) : next();
-              // });
             }else{
               next("Unrecognised channel");
             }

@@ -266,7 +266,10 @@
             //Subscribe to message channels
             this.channels.forEach((gc) => {
               gc.channels.forEach((channel) => {
+              console.log(gc.group + "" +  channel);
+              console.log(gc);
                 socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
+                  console.log(data.channel);
                   this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
                     $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
                     $('#chatView').scrollTop = $('#chatView').scrollHeight;

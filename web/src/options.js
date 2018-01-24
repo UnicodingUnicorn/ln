@@ -1,4 +1,4 @@
-var host = "192.168.99.100";
+var host = "10.0.75.1";
 
 export default {
   CLIENT_ID : '406jko1jadsm11w',
