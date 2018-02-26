@@ -8,12 +8,14 @@ import options from '../../options'
 
 const state = {
   messages : {},
-  num_messages : {}
+  num_messages : {},
+  last_pos : {}
 }
 
 const getters = {
   messages : state => state.messages,
-  num_messages : state => state.num_messages
+  num_messages : state => state.num_messages,
+  last_pos : state => state.last_pos
 }
 
 const actions = {
@@ -33,8 +35,9 @@ const actions = {
     return new Promise((resolve, reject) => {
       async.each(data.channels, function(gc, cb){
         async.each(gc.channels, function(channel, cb2){
-          messages.get_messages({group : gc.group, channel : channel}, data.token, function(m){
-            m.forEach(function(message){
+          messages.get_messages({group : gc.group, channel : channel}, data.token, function(data){
+            commit(types.INIT_POS, {gc : gc.group + '+' + channel, pos : data.last_pos});
+            data.messages.forEach(function(message){
               commit(types.ADD_MESSAGE, {message : message, gc : gc.group + '+' + channel});
             });
             cb2();
@@ -51,9 +54,9 @@ const actions = {
     return new Promise((resolve, reject) => {
       var message_length = state.num_messages[data.gc.group + '+' + data.gc.channel];
       if(message_length >= options.HISTORY_COUNT){
-        messages.get_messages_offset(data.gc, message_length, data.token, function(m){
-          for(var i = m.length - 1; i >= 0; i--)
-            commit(types.PREPEND_MESSAGE, {message : m[i], gc : data.gc.group + '+' + data.gc.channel});
+        messages.get_messages_offset(data.gc, message_length, data.token, function(data){
+          for(var i = data.messages.length - 1; i >= 0; i--)
+            commit(types.PREPEND_MESSAGE, {message : data.messages[i], gc : data.gc.group + '+' + data.gc.channel});
           resolve();
         });
       }else{
@@ -88,6 +91,15 @@ const actions = {
         resolve();
       }
     });
+  },
+  update_pos({commit, state}, data){
+    commit(types.UPDATE_POS, {gc : data.group + '+' + data.channel});
+  },
+  update_pos_specific({commit, state}, data){
+    commit(types.UPDATE_POS_SPECIFIC, {
+      gc : data.group + '+' + data.channel,
+      pos : data.pos
+    });
   }
 }
 
@@ -95,15 +107,14 @@ const mutations = {
   [types.ADD_MESSAGE](state, data){
     if(state.messages[data.gc]){
       state.num_messages[data.gc] += 1;
-      var new_dt = new Date(data.message.datetime);
       var group = state.messages[data.gc];
-      if(group[group.length - 1].date == messages.render_date(new_dt)){
+      if(messages.render_date(group[group.length - 1].datetime) == messages.render_date(+data.message.datetime)){
         var currentGroup = group[group.length - 1];
         var lastMessage = currentGroup.messages[currentGroup.messages.length - 1];
         if(lastMessage.user != data.message.user){
           currentGroup.messages.push({
             user : data.message.user,
-            datetime : data.message.datetime,
+            datetime : +data.message.datetime,
             type : data.message.type,
             messages : [data.message.message]
           });
@@ -111,18 +122,17 @@ const mutations = {
           if(lastMessage.type != data.message.type){
             currentGroup.messages.push({
               user : data.message.user,
-              datetime : data.message.datetime,
+              datetime : +data.message.datetime,
               type : data.message.type,
               messages : [data.message.message]
             });
           }else{
-            var old_dt = new Date(lastMessage.datetime);
-            if(messages.render_time(old_dt) == messages.render_time(new_dt)){
+            if(messages.render_time(lastMessage.datetime) == messages.render_time(+data.message.datetime)){
               lastMessage.messages.push(data.message.message);
             }else{
               currentGroup.messages.push({
                 user : data.message.user,
-                datetime : data.message.datetime,
+                datetime : +data.message.datetime,
                 type : data.message.type,
                 messages : [data.message.message]
               });
@@ -131,10 +141,10 @@ const mutations = {
         }
       }else{
         state.messages[data.gc].push({
-          date : messages.render_date(new Date(data.message.datetime)),
+          datetime : +data.message.datetime,
           messages : [{
             user : data.message.user,
-            datetime : data.message.datetime,
+            datetime : +data.message.datetime,
             type : data.message.type,
             messages : [data.message.message]
           }]
@@ -143,10 +153,10 @@ const mutations = {
     }else{
       Vue.set(state.num_messages, data.gc, 1);
       Vue.set(state.messages, data.gc, [{
-        date : messages.render_date(new Date(data.message.datetime)),
+        datetime : +data.message.datetime,
         messages : [{
           user : data.message.user,
-          datetime : data.message.datetime,
+          datetime : +data.message.datetime,
           type : data.message.type,
           messages : [data.message.message]
         }]
@@ -156,15 +166,14 @@ const mutations = {
   [types.PREPEND_MESSAGE](state, data){
     if(state.messages[data.gc]){
       state.num_messages[data.gc] += 1;
-      var new_dt = new Date(data.message.datetime);
       var group = state.messages[data.gc];
-      if(group[0].date == messages.render_date(new_dt)){
+      if(messages.render_date(group[0].datetime) == messages.render_date(+data.message.datetime)){
         var currentGroup = group[0];
         var lastMessage = currentGroup.messages[0];
         if(lastMessage.user != data.message.user){
           currentGroup.messages.unshift({
             user : data.message.user,
-            datetime : data.message.datetime,
+            datetime : +data.message.datetime,
             type : data.message.type,
             messages : [data.message.message]
           });
@@ -172,18 +181,18 @@ const mutations = {
           if(lastMessage.type != data.message.type){
             currentGroup.messages.unshift({
               user : data.message.user,
-              datetime : data.message.datetime,
+              datetime : +data.message.datetime,
               type : data.message.type,
               messages : [data.message.message]
             });
           }else{
             var old_dt = new Date(lastMessage.datetime);
-            if(messages.render_time(old_dt) == messages.render_time(new_dt)){
+            if(messages.render_time(old_dt) == messages.render_time(+data.message.datetime)){
               lastMessage.messages.unshift(data.message.message);
             }else{
               currentGroup.messages.unshift({
                 user : data.message.user,
-                datetime : data.message.datetime,
+                datetime : +data.message.datetime,
                 type : data.message.type,
                 messages : [data.message.message]
               });
@@ -192,10 +201,10 @@ const mutations = {
         }
       }else{
         state.messages[data.gc].unshift({
-          date : messages.render_date(new Date(data.message.datetime)),
+          datetime : +data.message.datetime,
           messages : [{
             user : data.message.user,
-            datetime : data.message.datetime,
+            datetime : +data.message.datetime,
             type : data.message.type,
             messages : [data.message.message]
           }]
@@ -204,10 +213,10 @@ const mutations = {
     }else{
       Vue.set(state.num_messages, data.gc, 1);
       Vue.set(state.messages, data.gc, [{
-        date : messages.render_date(new Date(data.message.datetime)),
+        datetime : +data.message.datetime,
         messages : [{
           user : data.message.user,
-          datetime : data.message.datetime,
+          datetime : +data.message.datetime,
           type : data.message.type,
           messages : [data.message.message]
         }]
@@ -216,6 +225,16 @@ const mutations = {
   },
   [types.CLEAR_MESSAGES](state){
     state.messages = {};
+  },
+  [types.INIT_POS](state, data){
+    if(!state.last_pos[data.gc])
+      state.last_pos[data.gc] = +data.pos;
+  },
+  [types.UPDATE_POS](state, data){
+    state.last_pos[data.gc] = Date.now();
+  },
+  [types.UPDATE_POS_SPECIFIC](state, data){
+    state.last_pos[data.gc] = data.pos;
   }
 }
 

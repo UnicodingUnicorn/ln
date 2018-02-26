@@ -72,6 +72,27 @@
   </form>
 </div>
 
+<div id="newchannelfile-modal" class="modal">
+  <form method="post" action="/channels/file" enctype="multipart/form-data">
+    <div class="modal-content">
+      <h4>New Group/Channel (+ Users) (By file)</h4>
+      <div class="file-field input-field">
+        <div class="btn blue-grey">
+          <span>Choose...</span>
+          <input name="file" type="file">
+        </div>
+        <div class="file-path-wrapper">
+          <input class="file-path validate" type="text">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Upload">
+      <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+    </div>
+  </form>
+</div>
+
 <div id="adduser-modal" class="modal">
   <form method="post" action="/channel/user">
     <div class="modal-content">

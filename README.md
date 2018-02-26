@@ -7,32 +7,38 @@ The application as a whole is a collection of [Docker](https://www.docker.com/) 
 
 If need be, go through ```docker-compose.yml``` and edit the fairly self-explanatory environment variables to one's specifications. Further documentation is provided in each service's README if documentation is needed.
 
+Default datasets have been provided in ```admin/sample_data```. Upload ```users.csv``` under the users tab in the admin interface and ```channels.csv``` under the channels interface if needed.
+
 ### To run:
 
 1. Go to ```./web``` and run ```npm run build```. This builds the frontend page.
 2. In root, run ```docker-compose up --build```. It may be necessary to kill and run it again to build the cache properly.
 
-### To run developmentally:
+### To run developmentally (frontend):
 
 1. In root, run ```docker-compose up --build```. It may be necessary to kill and run it again to build the cache properly.
 2. Go to ```./web``` and run ```npm run dev```.
 
 ## Default values
 
-Client:
+### Client:
+
 | id | name | secret |
+| -- | ---- | ------ |
 | 406jko1jadsm11w | ln | 5b8ead95c34d7b717826533883705cc6efe9971f2345341b8e570d14ba2fdd38 |
 
-Client Redirect URIs:
+### Client Redirect URIs:
+
 | client_id | uri |
+| --------- | --- |
 | 406jko1jadsm11w | 'http://localhost:8080/#/' |
 | 406jko1jadsm11w | 'http://192.168.99.100:8080/#/' |
 
-Admins:
+### Admins:
 
 | username | password |
 | -------- | -------- |
-| username | password |
+| admin | password |
 
 ## Services
 

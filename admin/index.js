@@ -25,12 +25,20 @@ var session = require("express-session");
 var async = require("async");
 var basicauth = require("basic-auth");
 var bcrypt = require("bcryptjs");
+var salt_rounds = 10;
+var colors = require("colors");
 var crypto = require("crypto");
+var split = require("split");
+var streamifier = require("streamifier");
 var uniqid = require("uniqid");
 
-var ALPHANUMERIC = 'ABCEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
+var multer = require("multer");
+var storage = multer.memoryStorage();
+var upload = multer({
+  storage : storage
+});
 
-var colors = require("colors");
+var ALPHANUMERIC = 'ABCEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890';
 
 var redis = require("redis");
 var cache = redis.createClient({
@@ -168,27 +176,15 @@ app.get('/clients', auth, function(req, res){
     res.data.error = req.session.error;
     delete req.session.error;
   }
-  res.data.clients = [];
-  db.query("SELECT * FROM clients", (list_err, list_res) => {
-    async.each(list_res.rows, (row, cb) => {
-      db.query("SELECT uri FROM client_redirect_uris WHERE client_id = $1", [row.id], (uri_err, uris) => {
-        var redirect_uris = [];
-        async.each(uris.rows, (indiv_uri, cb2) => {
-          redirect_uris.push(indiv_uri.uri);
-          cb2();
-        }, () => {
-          res.data.clients.push({
-            id : row.id,
-            name : row.name,
-            secret : row.secret,
-            redirect_uris : redirect_uris
-          });
-          cb();
-        });
-      });
-    }, () => {
+  db.query("select cl.id, cl.name, cl.secret, array_agg(cru.uri) AS redirect_uris FROM clients cl, client_redirect_uris cru WHERE cl.id = cru.client_id GROUP BY cl.id, cl.name, cl.secret;", (list_err, list_res) => {
+    if(list_err){
+      console.log(list_err);
+      res.data.error = "Database error";
       res.render('clients', res.data);
-    });
+    }else{
+      res.data.clients = list_res.rows;
+      res.render('clients', res.data);
+    }
   });
 });
 
@@ -280,7 +276,6 @@ app.get('/users', auth, function(req, res){
 });
 
 app.get('/user', auth, function(req, res){
-  console.log(req.query.id);
   db.query("SELECT * FROM users WHERE id = $1", [req.query.id], (get_err, user_res) => {
     if(get_err){
       req.session.error = get_err.reason;
@@ -312,7 +307,7 @@ app.post("/user", auth, function(req, res){
         req.session.error = "Database error";
         res.redirect("/users");
       }else{
-        var userid = user.id || req.body.id;
+        var userid = user.rows[0].id || req.body.id;
         var cb = (ins_err, ins_res, name) => {
           if(ins_err){
             console.log(ins_err);
@@ -327,7 +322,7 @@ app.post("/user", auth, function(req, res){
 
             req.session.success = "Success!";
             if(req.body.autogenpass)
-              req.session.success += " Autogenned password is " + req.body.password;
+              req.session.success += " Auto-generated password is " + req.body.password;
             res.redirect("/user?id=" + userid);
           }
         };
@@ -381,7 +376,7 @@ app.post("/user", auth, function(req, res){
           if(req.body.gender)
             user.gender = req.body.gender;
           if(req.body.dob)
-            user.dob = new Date(req.body.dob);
+            user.dob = new Date(req.body.dob).getTime();
           db.query("UPDATE users SET name = $1, username = $2, email = $3, gender = $4, dob = $5 WHERE id = $6", [
             user.name,
             user.username,
@@ -398,6 +393,122 @@ app.post("/user", auth, function(req, res){
   }
 });
 
+app.post("/user/file", auth, upload.single("file"), function(req, res){
+  var rs = streamifier.createReadStream(req.file.buffer).pipe(split());
+  var promises = [];
+  req.session.success = "";
+  var handle_line = (line, line_num) => {
+    return new Promise((resolve, reject) => {
+      var fields = line.split(",");
+      if(fields[0] != ""){
+        if(!fields[0]){
+          reject("Missing id field on line " + line_num);
+        }else if(!fields[1]){
+          reject("Missing name field on line " + line_num);
+        }else if(!fields[2]){
+          reject("Missing username field on line " + line_num);
+        }else if(!fields[3]){
+          reject("Missing email field on line " + line_num);
+        }else if(!fields[4]){
+          reject("Missing password field on line " + line_num);
+        }else if(!fields[5]){
+          reject("Missing gender field on line " + line_num);
+        }else if(!fields[6]){
+          reject("Missing D.O.B field on line " + line_num);
+        }else{
+          var password = "";
+          if(fields[4] == "_autogenpass"){
+            for(var i = 0; i < 8; i++)
+              password += ALPHANUMERIC.charAt(Math.floor(Math.random() * ALPHANUMERIC.length));
+            req.session.success += "Auto-generated password " + password + " for user " + fields[0] + ".\n";
+          }else{
+            password = fields[4];
+          }
+          password = bcrypt.hashSync(password, salt_rounds);
+          db.query("SELECT * FROM users WHERE id = $1", [
+            fields[0]
+          ], (get_err, get_res) => {
+            if(get_err){
+              console.log(get_err);
+              reject("Database error");
+            }else{
+              if(get_res.rows[0]){
+                var user = get_res.rows[0];
+                if(fields[1])
+                  user.name = fields[1];
+                if(fields[2])
+                  user.username = fields[2];
+                if(fields[3])
+                  user.email = fields[3];
+                if(fields[5])
+                  user.gender = fields[5];
+                if(fields[6])
+                  user.dob = new Date(fields[6]).getTime();
+                db.query("UPDATE users SET name = $1, username = $2, email = $3, gender = $4, dob = $5 WHERE id = $6", [
+                  user.name,
+                  user.username,
+                  user.email,
+                  user.gender,
+                  user.dob,
+                  fields[0]
+                ], (ins_err, ins_res) => {
+                  if(ins_err){
+                    console.log(ins_err);
+                    reject("Database error");
+                  }else{
+                    cache.hget('usernames', user.name.toUpperCase(), (cache_err, val) => {
+                      cache.hset('usernames', user.name.toUpperCase(), (val && !val.split('+').includes(fields[0])) ? val + fields[0] + '+' : fields[0] + '+');
+                    });
+                    user_cache.hset(fields[0], "_exists", 1);
+                    resolve();
+                  }
+                });
+              }else{
+                db.query("INSERT INTO users (id, name, username, email, password, gender, dob) VALUES ($1, $2, $3, $4, $5, $6, $7)", [
+                  fields[0],
+                  fields[1],
+                  fields[2],
+                  fields[3],
+                  password,
+                  fields[5],
+                  new Date(fields[6]).getTime()
+                ], (ins_err, ins_res) => {
+                  if(ins_err){
+                    console.log(ins_err);
+                    reject("Database error");
+                  }else{
+                    cache.hget('usernames', fields[1].toUpperCase(), (cache_err, val) => {
+                      cache.hset('usernames', fields[1].toUpperCase(), (val && !val.split('+').includes(fields[0])) ? val + fields[0] + '+' : fields[0] + '+');
+                    });
+                    user_cache.hset(fields[0], "_exists", 1);
+                    resolve();
+                  }
+                });
+              }
+            }
+          });
+        }
+      }else{
+        resolve();
+      }
+    });
+  };
+  var line_num = 0;
+  rs.on("data", (line) => {
+    promises.push(handle_line(line, line_num));
+    line_num++;
+  });
+  rs.on("end", () => {
+    Promise.all(promises).then(() => {
+      req.session.success += "Success"
+      res.redirect("/users");
+    }, (err) => {
+      req.session.error = err;
+      res.redirect("/users");
+    });
+  });
+});
+
 app.get("/channels", auth, function(req, res){
   if(req.session.success){
     res.data.success = req.session.success;
@@ -408,31 +519,21 @@ app.get("/channels", auth, function(req, res){
     delete req.session.error;
   }
   var gcs_tmp = {};
-  db.query("SELECT * FROM channels", (get_err, get_res) => {
+  db.query("SELECT \"group\", array_agg(channel) AS channels FROM channels GROUP BY \"group\"", (get_err, get_res) => {
     res.data.gcs = [];
-    var tmp_gcs = {};
     if(get_err){
       console.log(get_err);
       res.data.error = "Database error";
       res.render('channels', res.data);
-    }else if(!get_res.rows[0]){
-      res.render('channels', res.data);
     }else{
-      console.log(get_res.rows);
       async.each(get_res.rows, (row, cb) => {
-        tmp_gcs[row.group] ? tmp_gcs[row.group].push(row.channel) : tmp_gcs[row.group] = [row.channel];
+        res.data.gcs.push({
+          group : row.group,
+          channels : row.channels
+        });
         cb();
       }, () => {
-        console.log(tmp_gcs);
-        async.each(Object.keys(tmp_gcs), (key, cb2) => {
-          res.data.gcs.push({
-            group : key,
-            channels : tmp_gcs[key]
-          });
-          cb2();
-        }, () => {
           res.render('channels', res.data);
-        });
       });
     }
   });
@@ -468,6 +569,138 @@ app.post("/channel", auth, function(req, res){
       }
     });
   }
+});
+
+app.post("/channels/file", auth, upload.single("file"), function(req, res){
+  var rs = streamifier.createReadStream(req.file.buffer).pipe(split());
+  var promises = [];
+  req.session.success = "";
+  var handle_line = (line, line_num) => {
+    return new Promise((resolve, reject) => {
+      var fields = line.split(",");
+      if(fields[0] != ""){
+        if(!fields[0]){
+          reject("Missing group field on line " + line_num);
+        }else if(!fields[1]){
+          reject("Missing channel field on line " + line_num);
+        }else{
+          cache.exists(fields[0] + '+' + fields[1], (exists_err, exists) => {
+            var update_users = () => {
+              async.each(fields.slice(2, fields.length), (userid, cb) => {
+                user_cache.exists(userid, (user_exists_err, user_exists) => {
+                  if(user_exists){
+                    cache.get(fields[0] + '+' + fields[1], (get_err, channel_users) => {
+                      if(!channel_users){
+                        cb(fields[0] + ":" + fields[1] + " not found when adding users.");
+                      }else{
+                        channel_users = JSON.parse(channel_users);
+                        if(channel_users.includes(userid)){
+                          cb();
+                        }else{
+                          db.query("INSERT INTO permissions (\"user\", scope, action) VALUES ($1, $2, $3), ($4, $5, $6), ($7, $8, $9), ($10, $11, $12)", [
+                            userid,
+                            fields[0] + '+' + fields[1],
+                            'send_message',
+                            userid,
+                            fields[0] + '+' + fields[1],
+                            'view_channel',
+                            userid,
+                            fields[0] + '+' + fields[1],
+                            'send_file',
+                            userid,
+                            fields[0] + '+' + fields[1],
+                            'add_user'
+                          ], (ins_err, ins_body) => {
+                            if(ins_err){
+                              console.log(ins_err);
+                              cb("Database error");
+                            }else{
+                              user_cache.hexists(userid, fields[0], (group_exists_err, group_exists) => {
+                                if(!group_exists){
+                                  db.query("INSERT INTO permissions (\"user\", scope, action) VALUES ($1, $2, $3)", [
+                                    userid,
+                                    fields[0],
+                                    'add_channel'
+                                  ], (ins_channel_err, ins_channel_body) => {
+                                    user_cache.hset(userid, fields[0], 1);
+                                  });
+                                }
+                              });
+                              //channel_users.push(userid);
+
+                              user_cache.hset(userid, fields[0] + '+' + fields[1], 1);
+                              //cache.set(group + '+' + channel, JSON.stringify(channel_users));
+                              db.query("INSERT INTO channel_users (\"group\", channel, \"user\") VALUES ($1, $2, $3)", [
+                                fields[0],
+                                fields[1],
+                                userid
+                              ], (mod_err, mod_res) => {
+                                if(mod_err){
+                                  console.log(mod_err);
+                                  cb("Database error");
+                                }else{
+                                  cb();
+                                }
+                              });
+                            }
+                          });
+                        }
+                      }
+                    });
+                  }else{
+                    resolve();
+                  }
+                });
+              }, (err) => {
+                if(err){
+                  reject(err)
+                }else{
+                  cache.get(fields[0] + '+' + fields[1], (get_err, channel_users) => {
+                    channel_users = channel_users ? JSON.parse(channel_users) : [];
+                    channel_users.push(...fields.slice(2, fields.length));
+                    cache.set(fields[0] + '+' + fields[1], JSON.stringify(channel_users));
+                    resolve();
+                  });
+                }
+              });
+            };
+            if(exists){
+              update_users();
+            }else{
+              db.query("INSERT INTO channels (\"group\", channel) VALUES ($1, $2)", [
+                fields[0],
+                fields[1]
+              ], (ins_err, ins_body) => {
+                if(ins_err){
+                  console.log(ins_err);
+                  reject("Database error");
+                }else{
+                  cache.set(fields[0] + '+' + fields[1], JSON.stringify([]));
+                  update_users();
+                }
+              });
+            }
+          });
+        }
+      }else{
+        resolve();
+      }
+    });
+  };
+  var line_num = 0;
+  rs.on("data", (line) => {
+    promises.push(handle_line(line, line_num));
+    line_num++;
+  });
+  rs.on("end", () => {
+    Promise.all(promises).then(() => {
+      req.session.success += "Success"
+      res.redirect("/channels");
+    }, (err) => {
+      req.session.error = err;
+      res.redirect("/channels");
+    });
+  });
 });
 
 app.post("/channel/user", auth, function(req, res){
@@ -510,7 +743,7 @@ app.post("/channel/user", auth, function(req, res){
               req.session.error = "Database error";
               res.redirect("/channels");
             }else{
-              user_cache.hexists(req.body.user, req.body.group, (exists_err, group_exists) => {
+              user_cache.hexists(req.body.userid, req.body.group, (exists_err, group_exists) => {
                 if(!group_exists){
                   db.query("INSERT INTO permissions (\"user\", scope, action) VALUES ($1, $2, $3)", [
                     req.body.userid,

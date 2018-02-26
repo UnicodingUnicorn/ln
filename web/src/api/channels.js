@@ -43,5 +43,20 @@ export default{
         toastr.error(res.body.message);
       }
     );
+  },
+  updateTimestamp(token, gc, cb){
+    Vue.http.post(options.MESSAGES_URL + '/update_position', {
+      group : gc.group,
+      channel : gc.channel,
+      timestamp : (new Date()).getTime()
+    }, {
+      headers : {'Authorization' : 'Bearer ' + token}
+    }).then(
+      res => {
+        cb(res.body);
+      }, res => {
+        toastr.error(res.body.message);
+      }
+    );
   }
 }

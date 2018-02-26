@@ -83,6 +83,11 @@ const actions = {
         resolve();
       });
     });
+  },
+  update_position({commit, state}, data){
+    return new Promise((resolve) => {
+      channel_api.updateTimestamp(data.token, data.gc, resolve);
+    });
   }
 }
 

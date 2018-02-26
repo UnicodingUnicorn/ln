@@ -14,7 +14,10 @@ export default{
       responseType : 'json'
     }).then(
       function(res){
-        cb(res.body);
+        cb({
+          messages : res.body.messages,
+          last_pos : res.body.timestamp
+        });
       }, function(res){
         toastr.error(res.body.message);
     });
@@ -25,7 +28,10 @@ export default{
       responseType : 'json'
     }).then(
       function(res){
-        cb(res.body);
+        cb({
+          messages : res.body.messages,
+          last_pos : req.body.timestamp
+        });
       }, function(res){
         toastr.error(res.body.message);
     });
@@ -64,11 +70,11 @@ export default{
     )
   },
   render_time(datetime){
-    var dt = new Date(datetime);
+    var dt = new Date(+datetime);
     return (dt.getHours() < 10 ? '0' + dt.getHours() : dt.getHours()) + ":" + (dt.getMinutes() < 10 ? '0' + dt.getMinutes() : dt.getMinutes());
   },
   render_date(datetime){
-    var dt = new Date(datetime);
-    return dt.getDay() + "/" + dt.getMonth() + "/" + dt.getFullYear();
+    var dt = new Date(+datetime);
+    return dt.getDate() + "/" + (dt.getMonth() + 1) + "/" + dt.getFullYear();
   }
 }

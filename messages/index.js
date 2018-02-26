@@ -31,6 +31,11 @@ var cache = redis.createClient({
   port : process.env.REDIS_PORT,
   db : 0
 });
+var usersCache = redis.createClient({
+  host : process.env.REDIS_HOST,
+  port : process.env.REDIS_PORT,
+  db : 1
+});
 
 var { Pool } = require("pg");
 var db = new Pool({
@@ -98,7 +103,11 @@ app.get("/messages/:group/:channel", auth, function(req, res){
             req.query.offset ? req.query.offset : 0
           ], (err, body) => {
             if(err){
-              res.status(200).json({}); //Just return an empty body
+              res.status(200).json({
+                message : "Success",
+                messages : {},
+                timestamp : undefined
+              }); //Just return an empty body
             }else{
               var messages_data = [];
               body.rows.forEach((message) => {
@@ -110,12 +119,18 @@ app.get("/messages/:group/:channel", auth, function(req, res){
                 }
                 messages_data.push({
                   user : message.user,
-                  datetime : message.datetime.getTime(),
+                  datetime : message.datetime,
                   message : message_text,
                   type : message.type
                 });
               });
-              res.status(200).json(messages_data);
+              usersCache.hget(req.user, req.params.group + '+' + req.params.channel, (cache_err, timestamp) => {
+                res.status(200).json({
+                  message : "Success",
+                  messages : messages_data,
+                  timestamp : timestamp
+                });
+              });
             }
           });
         }

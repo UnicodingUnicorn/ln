@@ -16,7 +16,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-
 var SCWorker = require('socketcluster/scworker');
 var fs = require('fs');
 var express = require('express');
@@ -86,11 +85,11 @@ class Worker extends SCWorker {
         }else if(identifier == 'chat'){
           users_cache.hexists(authToken.userid, req.channel.split(':')[1], (err, perm) => {
             if(perm){
-              var datetime = new Date();
+              var datetime = Date.now();
               var gc = req.channel.split(':')[1].split('+');
               //Log message
               db.query("INSERT INTO messages (id, datetime, \"user\", \"group\", channel, message, type) VALUES ($1, $2, $3, $4, $5, $6, $7)", [
-                datetime.getTime() + "&" + authToken.userid,
+                datetime + "&" + authToken.userid,
                 datetime,
                 authToken.userid,
                 gc[0],
@@ -102,7 +101,6 @@ class Worker extends SCWorker {
                   console.log(err);
                   next("Database error")
                 }else{
-                  console.log("done");
                   //Add metadata
                   req.data.datetime = datetime;
                   req.data.user = authToken.userid;
@@ -165,7 +163,7 @@ class Worker extends SCWorker {
       socket.on('pm', function(data, respond){
         //Add metadata
         var message = {};
-        var datetime = new Date();
+        var datetime = Date.now();
         message.datetime = datetime;
         message.user = data.sender;
         message.users = data.sender < data.recipient ? data.sender + '+' + data.recipient : data.recipient + '+' + data.sender;
@@ -173,7 +171,7 @@ class Worker extends SCWorker {
         message.type = data.type;
 
         db.query("INSERT INTO pms (id, datetime, \"user\", recipient, users, message, type) VALUES ($1, $2, $3, $4, $5, $6, $7)", [
-          datetime.getTime() + "&" + data.sender,
+          datetime + "&" + data.sender,
           message.datetime,
           message.user,
           data.recipient,
@@ -185,20 +183,19 @@ class Worker extends SCWorker {
             console.log(err);
             respond("Database error");
           }else{
-            console.log(ins_res);
             scServer.exchange.publish('pm:' + data.recipient, message);
             respond();
           }
         });
+      });
 
-        // pms.insert(message, datetime.getTime() + "&" + data.sender, (err, ins_message) => { //Log message
-        //   if(err){
-        //     respond(err.reason);
-        //   }else{
-        //     scServer.exchange.publish('pm:' + data.recipient, message);
-        //     respond();
-        //   }
-        // });
+      socket.on('ping', function(data, respond){
+        var gc = data.group + '+' + data.channel;
+        users_cache.hexists(socket.authToken.userid, gc, (exists_err, exists) => {
+          if(exists)
+            users_cache.hset(socket.authToken.userid, gc, Date.now());
+          respond();
+        });
       });
 
       socket.on('logout', function(data, respond){

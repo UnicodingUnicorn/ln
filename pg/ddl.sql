@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT NOT NULL,
   password TEXT NOT NULL,
   gender CHAR NOT NULL,
-  dob TIMESTAMPTZ NOT NULL,
+  dob BIGINT NOT NULL,
   avatar TEXT
 );
 
@@ -76,7 +76,7 @@ INSERT INTO admins (username, password) VALUES (
 
 CREATE TABLE IF NOT EXISTS messages (
   id TEXT PRIMARY KEY NOT NULL,
-  datetime TIMESTAMPTZ NOT NULL,
+  datetime BIGINT NOT NULL,
   "user" TEXT NOT NULL,
   "group" TEXT NOT NULL,
   channel TEXT NOT NULL,

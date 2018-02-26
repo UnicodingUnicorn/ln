@@ -12,5 +12,9 @@ export const ADD_MESSAGE = 'ADD_MESSAGE'
 export const PREPEND_MESSAGE = 'PREPEND_MESSAGE'
 export const CLEAR_MESSAGES = 'CLEAR_MESSAGES'
 
+export const INIT_POS = 'INIT_POS'
+export const UPDATE_POS = 'UPDATE_POS'
+export const UPDATE_POS_SPECIFIC = 'UPDATE_POS_SPECIFIC'
+
 export const ADD_USER = 'ADD_USER'
 export const ADD_USERS = 'ADD_USERS'

@@ -51,21 +51,25 @@
           </div>
         </div>
         <ul class="collection with-header" v-for="m in messages[group + '+' + channel]">
-          <li class="collection-header"><h6 class="cyan-text">{{m.date}}</h6></li>
-          <li v-for="m2 in m.messages" class="collection-item avatar" style="text-align:left;">
-            <img v-if="users[m2.user].avatar" class="circle" v-bind:src="users[m2.user].avatar">
-            <img v-else class="circle" v-bind:src="default_avatar">
-            <a v-if="user_info.sub != m2.user" v-on:click="showuserprofile(m2.user)" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
-            <span v-else class="title"><b>{{users[m2.user].username}}</b></span>
-            <p v-for="m3 in m2.messages">
-              <span v-if="m2.type == 'm'">{{m3}}</span>
-              <span v-else-if="m2.type == 'f'">
-                <a v-bind:href="file_url(m2.user, m3.filename)" v-bind:download="m2.originalname"><b>{{m3.originalname}}</b></a><br />
-                <img v-if="is_image(m3.originalname)" v-bind:src="file_url(m2.user, m3.filename)" v-bind:alt="m3.originalname" v-on:load="image_load()" class="materialboxed" width="90%" ><br />
-              </span>
-            </p>
-            <span class="secondary-content">{{render_time(m2.datetime)}}</span>
-          </li>
+          <li class="collection-item red-text" v-if="is_last_read(m, messages[group + '+' + channel])">Unread</li>
+          <li class="collection-header"><h6 class="cyan-text">{{render_date(m.datetime)}}</h6></li>
+          <div v-for="m2 in m.messages">
+            <li class="collection-item red-text" v-if="!is_first(m2, m.messages) && is_last_read(m2, m.messages)">Unread</li>
+            <li class="collection-item avatar" style="text-align:left;">
+              <img v-if="users[m2.user].avatar" class="circle" v-bind:src="users[m2.user].avatar">
+              <img v-else class="circle" v-bind:src="default_avatar">
+              <a v-if="user_info.sub != m2.user" v-on:click="showuserprofile(m2.user)" href='#'><span v-bind:id="m2.user" class="title">{{users[m2.user].username}}</span></a>
+              <span v-else class="title"><b>{{users[m2.user].username}}</b></span>
+              <p v-for="m3 in m2.messages">
+                <span v-if="m2.type == 'm'">{{m3}}</span>
+                <span v-else-if="m2.type == 'f'">
+                  <a v-bind:href="file_url(m2.user, m3.filename)" v-bind:download="m2.originalname"><b>{{m3.originalname}}</b></a><br />
+                  <img v-if="is_image(m3.originalname)" v-bind:src="file_url(m2.user, m3.filename)" v-bind:alt="m3.originalname" v-on:load="image_load()" class="materialboxed" width="90%" ><br />
+                </span>
+              </p>
+              <span class="secondary-content">{{render_time(m2.datetime)}}</span>
+            </li>
+          </div>
         </ul>
       </div>
       <div class="fixed-action-btn"><a class="btn-floating waves-effect waves-light right red modal-trigger" href="#attachment-modal"><i class="material-icons">attach_file</i></a></div>
@@ -109,6 +113,7 @@
   import crypto from 'crypto'
   import socketCluster from 'socketcluster-client'
   import toastr from 'toastr'
+  import Visibility from 'visibilityjs'
 
   import options from "../options"
   import messagesAPI from "../api/messages"
@@ -148,6 +153,7 @@
       ...mapGetters({
         token : 'user_token',
         channels : 'channels',
+        last_pos : 'last_pos',
         messages : 'messages',
         pms : 'pms',
         users : 'users',
@@ -182,6 +188,7 @@
         });
       },
       render_time : messagesAPI.render_time,
+      render_date : messagesAPI.render_date,
       send : function(event){
         if(this.message != ""){ //Make sure one is not working with a blank message
           if(this.group == 'pm'){ //Sort out PMs
@@ -266,13 +273,12 @@
             //Subscribe to message channels
             this.channels.forEach((gc) => {
               gc.channels.forEach((channel) => {
-              console.log(gc.group + "" +  channel);
-              console.log(gc);
                 socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
-                  console.log(data.channel);
                   this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
-                    $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-                    $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                    if(!Visibility.hidden() && data.channel.group == this.group && data.channel.channel == this.channel){
+                      $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                      $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                    }
                   });
                 });
               });
@@ -289,8 +295,10 @@
             if(!this.pms.includes(data.user))
               this.$store.dispatch('add_pm_channel', data.user);
             this.$store.dispatch('add_message', {message : data, gc : 'pm' + '+' + data.user}).then(() => {
-              $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-              $('#chatView').scrollTop = $('#chatView').scrollHeight;
+              if(!Visibility.hidden() && data.channel.group == 'pm' && data.user == this.channel){
+                $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                $('#chatView').scrollTop = $('#chatView').scrollHeight;
+              }
             });
           });
           //Subscribe to updates channel
@@ -318,8 +326,10 @@
                   gc.channels.forEach((channel) => {
                     socket.subscribe('chat:' + gc.group + '+' + channel, {waitForAuth : true}).watch((data) => {
                       this.$store.dispatch('add_message', {message : data, gc : data.channel.group + '+' + data.channel.channel}).then(() => {
-                        $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
-                        $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                        if(!Visibility.hidden() && data.channel.group == this.group && data.channel.channel == this.channel){
+                          $('#chatView')[0].scrollTop = $('#chatView')[0].scrollHeight;
+                          $('#chatView').scrollTop = $('#chatView').scrollHeight;
+                        }
                       });
                     });
                   });
@@ -330,6 +340,12 @@
             }else if(data.action == 'refresh_user'){ //Refresh specific user defined in scope
               this.$store.dispatch('refresh_user', data.scope).then(() => {
                 this.$forceUpdate();
+              });
+            }else if(data.action == 'refresh_pos'){ //Refresh position of a gc
+              this.$store.dispatch('update_pos_specific', {
+                group : data.group,
+                channel : data.channel,
+                pos : data.pos
               });
             }
           });
@@ -397,11 +413,25 @@
       },
       updated_user : function(){
         async.each(Object.keys(this.users), (userid, cb) => {
-          socket.publish('update:' + userid, {action : "refresh_user", scope : this.user_info.sub}, (err) => {
+          socket.publish('update:' + userid, {
+            action : "refresh_user",
+            scope : this.user_info.sub
+          }, (err) => {
             if(err) console.log(err);
           });
           cb();
         }, () => {});
+      },
+      is_first : function(message, message_group){
+        return message_group.indexOf(message) <= 0;
+      },
+      is_last_read : function(message, message_group){
+        var roughen = (val) => Math.ceil(val / 1000);
+        //First message being after last_pos means whole chain is unread
+        if(message_group.indexOf(message) <= 0)
+          return roughen(message.datetime) > roughen(+this.last_pos[this.group + '+' + this.channel]);
+        //Otherwise make sure the last message's date is below last_pos
+        return roughen(message.datetime) > roughen(+this.last_pos[this.group + '+' + this.channel]) && roughen(message_group[message_group.indexOf(message) - 1].datetime) < roughen(this.last_pos[this.group + '+' + this.channel]);
       }
     },
     mounted : function(){
@@ -430,10 +460,40 @@
         //Connect to socketcluster
         socket = socketCluster.connect(socket_options);
         socket.on('connect', (status) => {
+          Visibility.onVisible(() => {
+            var i = 0;
+            $('#chatView').scroll((event) => {
+              if(Math.ceil($('#chatView').scrollTop() + $('#chatView').innerHeight()) >= $('#chatView')[0].scrollHeight && i > 0 && !Visibility.hidden()){
+                console.log('foo');
+                this.$store.dispatch('update_pos', {
+                  group : this.group,
+                  channel : this.channel
+                });
+                socket.emit('ping', {
+                  group : this.group,
+                  channel : this.channel
+                }, () => {
+                  socket.publish('update:' + this.user_info.sub, {
+                    action : "refresh_pos",
+                    group : this.group,
+                    channel : this.channel,
+                    pos : this.last_pos[this.group + '+' + this.channel]
+                  }, (err) => {
+                    if(err) console.log(err);
+                    this.$forceUpdate();
+                  });
+                });
+              }
+              i++;
+            });
+          });
           if(status.isAuthenticated){
             this.init_channels();
           }else{
-            socket.emit('login', {token : this.token, channel : this.group + '+' + this.channel}, (err) => {
+            socket.emit('login', {
+              token : this.token,
+              channel : this.group + '+' + this.channel
+            }, (err) => {
               if(err){
                 this.$router.push('/');
                 if(this.token)

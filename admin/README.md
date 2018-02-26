@@ -1,6 +1,6 @@
 # admin
 
-Admin interface (combined frontend/backend) for the creation and editing of clients, users and channels. Depends on ```pg``` for its database and ```redis``` as a cache.
+Admin interface (combined frontend/backend) for the creation and editing of clients, users and channels. Depends on ```pg``` for its database and ```redis``` as a cache. The folder ```./sample_data``` contains sample data to be used with the file upload system. Upload them under the appropriate tabs.
 
 The default port for this service is ```10201```.
 
@@ -17,7 +17,7 @@ Requires ```npm``` and ```node```.
 
 | Name | Description |
 | ---- | ----------- |
-| admin | Admin credentials (username/password). Default starting entry "username"/"password". |
+| admin | Admin credentials (username/password). Default starting entry "admin"/"password". |
 | channels | Channel information. |
 | channel_users | Group-Channel each User belongs to. |
 | clients | Client information. |

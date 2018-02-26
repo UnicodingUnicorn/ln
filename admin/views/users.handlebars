@@ -165,3 +165,24 @@
     </div>
   </form>
 </div>
+
+<div id="newuserfile-modal" class="modal">
+  <form method="post" action="/user/file" enctype="multipart/form-data">
+    <div class="modal-content">
+      <h4>New User (By file)</h4>
+      <div class="file-field input-field">
+        <div class="btn blue-grey">
+          <span>Choose...</span>
+          <input name="file" type="file">
+        </div>
+        <div class="file-path-wrapper">
+          <input class="file-path validate" type="text">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <input type="submit" class="modal-action waves-effect waves-green btn-flat" value="Upload">
+      <a class="modal-close waves-effect waves-red btn-flat">Close</a>
+    </div>
+  </form>
+</div>
