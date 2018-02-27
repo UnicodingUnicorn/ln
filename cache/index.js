@@ -50,14 +50,25 @@ db.query("SELECT \"group\", channel FROM channels", (err, res) => {
     console.log(err);
   }else if(res.rows[0]){
     async.each(res.rows[0].array_agg, (row, cb) => {
-      db.query("SELECT array_agg(\"user\") FROM channels WHERE \"group\" = $1 AND channel = $2 GROUP BY \"group\"", [
+      db.query("SELECT array_agg(\"user\") AS users FROM channel_users WHERE \"group\" = $1 AND channel = $2 GROUP BY \"group\", channel", [
         row.group,
         row.channel
       ], (err2, res2) => {
-        cache.set(row.group + '+' + row.channel, JSON.stringify(res2.rows[0] ? res2.rows[0].array_agg : []), cb);
+        if(err2){
+          cb(err2);
+        }else{
+          var val = JSON.stringify(res2.rows[0] ? res2.rows[0].users : [])
+          cache.get(row.group + '+' + row.channel, (row_err, row_val) => {
+            if(!row_val || (row_val != val)){
+              cache.set(row.group + '+' + row.channel, val, cb);
+            }else{
+              cb();
+            }
+          })
+        }
       });
-    }, () => {
-      console.log("Cache updated with channel users.".green);
+    }, (cb_err) => {
+      console.log(cb_err ? cb_err : "Cache updated with channel users.".green);
     });
   }
 });
@@ -66,7 +77,9 @@ db.query("SELECT DISTINCT \"group\", \"user\" FROM channel_users", (err, res) =>
     console.error(err);
   }else{
     async.each(res.rows, (row, cb) => {
-      users_cache.hset(row.user, row.group, 1, cb);
+      users_cache.hexists(row.user, row.group, (exists_err, exists) => {
+        exists ? cb() : users_cache.hset(row.user, row.group, 1, cb);
+      })
     }, () => {
       console.log("Cache updated with user groups.".green);
     });
@@ -90,7 +103,9 @@ db.query("SELECT \"user\", scope FROM permissions WHERE action = 'send_message'"
     console.error(err);
   }else{
     async.each(res.rows, (row, cb) => {
-      users_cache.hset(row.user, row.scope, 1, cb);
+      users_cache.hexists(row.user, row.scope, (exists_err, exists) => {
+        exists ? cb() : users_cache.hset(row.user, row.scope, 1, cb);
+      })
     }, () => {
       console.log("Cache updated with user permissions.".green);
     });
